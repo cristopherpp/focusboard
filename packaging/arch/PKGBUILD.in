@@ -1,10 +1,10 @@
 # Local release recipe. install-arch.sh supplies the version and archive checksum.
 pkgname=focusboard
 pkgver=@PKGVER@
-pkgrel=3
+pkgrel=1
 pkgdesc='Minimal Markdown goals and notes gadget for the KDE Wayland desktop'
 arch=('x86_64')
-# No public upstream URL has been configured yet.
+url='https://github.com/cristopherpp/focusboard'
 license=('MIT')
 depends=('glibc' 'libgcc' 'libstdc++' 'libglvnd' 'qt6-base>=6.8'
          'qt6-declarative>=6.8' 'qt6-wayland' 'qt6-svg' 'layer-shell-qt>=6.6' 'hicolor-icon-theme')

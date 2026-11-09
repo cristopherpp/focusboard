@@ -1,5 +1,13 @@
 /build*/
+/focusboard
+/.ci-stage/
 CMakeUserPresets.json
+*.o
+*.a
+*.so
+*.so.*
+*.tmp
+*.qmlls.ini
 *.pkg.tar.*
 *.src.tar.*
 /.agents/
@@ -12,3 +20,4 @@ __pycache__/
 *.swo
 *~
 .SRCINFO
+!packaging/aur/focusboard-git/.SRCINFO

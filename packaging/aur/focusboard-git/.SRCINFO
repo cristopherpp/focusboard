@@ -1,0 +1,28 @@
+pkgbase = focusboard-git
+	pkgdesc = Minimal Markdown goals and notes gadget for the KDE Wayland desktop (Git version)
+	pkgver = 0.r1.g6439d26
+	pkgrel = 1
+	url = https://github.com/cristopherpp/focusboard
+	arch = x86_64
+	license = MIT
+	checkdepends = ttf-font
+	makedepends = cmake
+	makedepends = ninja
+	makedepends = git
+	depends = glibc
+	depends = libgcc
+	depends = libstdc++
+	depends = libglvnd
+	depends = qt6-base>=6.8
+	depends = qt6-declarative>=6.8
+	depends = qt6-wayland
+	depends = qt6-svg
+	depends = layer-shell-qt>=6.6
+	depends = hicolor-icon-theme
+	provides = focusboard
+	conflicts = focusboard
+	options = !debug
+	source = focusboard::git+https://github.com/cristopherpp/focusboard.git
+	sha256sums = SKIP
+
+pkgname = focusboard-git

@@ -29,7 +29,9 @@ tar --create --xz --file "$archive" --directory "$root" \
     --exclude='CMakeFiles' --exclude='CMakeCache.txt' \
     --exclude='.cache' --exclude='__pycache__' --exclude='*.log' --exclude='.SRCINFO' \
     --exclude='*.pkg.tar.*' --exclude='*.src.tar.*' \
-    CMakeLists.txt LICENSE README.md .clang-format .gitignore src qml assets tests scripts packaging
+    CMakeLists.txt LICENSE README.md CHANGELOG.md CONTRIBUTING.md PERFORMANCE.md \
+    .clang-format .gitignore \
+    src qml assets tests scripts packaging
 read -r checksum _ < <(sha256sum "$archive")
 sed -e "s/@PKGVER@/$version/g" -e "s/@SOURCE_SHA256@/$checksum/g" \
     "$root/packaging/arch/PKGBUILD.in" > "$stage/PKGBUILD"

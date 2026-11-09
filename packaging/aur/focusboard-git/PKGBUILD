@@ -1,11 +1,9 @@
-# Configure BOTH real upstream URLs before renaming this file to PKGBUILD.
-# This template intentionally cannot fetch an invented repository.
 pkgname=focusboard-git
-pkgver=0.r0.g0000000
+pkgver=0.r1.g6439d26
 pkgrel=1
 pkgdesc='Minimal Markdown goals and notes gadget for the KDE Wayland desktop (Git version)'
 arch=('x86_64')
-url='@UPSTREAM_PROJECT_URL@'
+url='https://github.com/cristopherpp/focusboard'
 license=('MIT')
 depends=('glibc' 'libgcc' 'libstdc++' 'libglvnd' 'qt6-base>=6.8'
          'qt6-declarative>=6.8' 'qt6-wayland' 'qt6-svg' 'layer-shell-qt>=6.6' 'hicolor-icon-theme')
@@ -13,7 +11,7 @@ makedepends=('cmake' 'ninja' 'git')
 checkdepends=('ttf-font')
 provides=('focusboard')
 conflicts=('focusboard')
-source=('focusboard::git+@UPSTREAM_GIT_URL@')
+source=('focusboard::git+https://github.com/cristopherpp/focusboard.git')
 sha256sums=('SKIP') # VCS sources are mutable; release snapshots use real checksums.
 options=('!debug')
 

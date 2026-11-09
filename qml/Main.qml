@@ -160,8 +160,8 @@ ApplicationWindow {
     Text {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
         anchors.margins: 16
-        visible: root.documents.error.length > 0
-        text: root.documents.error
+        visible: root.documents.error.length > 0 || root.documents.unsaved
+        text: root.documents.error.length > 0 ? root.documents.error : "Unsaved changes…"
         color: root.dark ? "#ffb4a8" : "#992d21"
         font.pixelSize: 12
         wrapMode: Text.Wrap

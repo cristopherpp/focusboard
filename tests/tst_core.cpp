@@ -4,10 +4,12 @@
 #include "../src/integration/AutostartManager.hpp"
 #include <QDir>
 #include <QFile>
+#include <QSaveFile>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <unistd.h>
 class CoreTests : public QObject {
     Q_OBJECT
     QTemporaryDir environment;
@@ -68,17 +70,130 @@ class CoreTests : public QObject {
     }
     void failedWritePreservesMemoryAndRetries() {
         DocumentStore store;
-        const QString path = store.dataDirectory() + QStringLiteral("/goals.md");
-        QVERIFY(QDir().mkpath(path));
+        const QString path = store.dataDirectory();
+        QVERIFY(QDir().mkpath(QFileInfo(path).absolutePath()));
+        QFile obstacle(path);
+        QVERIFY(obstacle.open(QIODevice::WriteOnly));
+        obstacle.close();
         store.setDocument(QStringLiteral("goals"), QStringLiteral("pending"));
         store.flush();
         QVERIFY(!store.error().isEmpty());
+        QVERIFY(store.unsaved());
         QCOMPARE(store.goals(), QStringLiteral("pending"));
-        QVERIFY(QDir().rmdir(path));
-        store.flush();
+        QVERIFY(obstacle.remove());
+        QTRY_VERIFY_WITH_TIMEOUT(!store.unsaved(), 2500); // Retry needs no second edit.
         QVERIFY(store.error().isEmpty());
         DocumentStore restored;
         QCOMPARE(restored.goals(), QStringLiteral("pending"));
+    }
+    void externalReplacementReloadsCleanDocument() {
+        DocumentStore store;
+        store.setDocument(QStringLiteral("goals"), QStringLiteral("old\n"));
+        QVERIFY(store.flush());
+        QSaveFile external(store.dataDirectory() + QStringLiteral("/goals.md"));
+        QVERIFY(external.open(QIODevice::WriteOnly));
+        QCOMPARE(external.write("# external\n"), 11LL);
+        QVERIFY(external.commit());
+        QTRY_COMPARE_WITH_TIMEOUT(store.goals(), QStringLiteral("# external\n"), 2000);
+        QVERIFY(!store.unsaved());
+        QVERIFY(!store.conflicted());
+    }
+    void externalReplacementKeepsBothVersions() {
+        DocumentStore store;
+        store.setDocument(QStringLiteral("goals"), QStringLiteral("base\n"));
+        QVERIFY(store.flush());
+        store.setDocument(QStringLiteral("goals"), QStringLiteral("local π\n"));
+        QSaveFile external(store.dataDirectory() + QStringLiteral("/goals.md"));
+        QVERIFY(external.open(QIODevice::WriteOnly));
+        QCOMPARE(external.write("external\n"), 9LL);
+        QVERIFY(external.commit());
+        QVERIFY(!store.flush());
+        QVERIFY(store.conflicted());
+        QVERIFY(store.unsaved());
+        QCOMPARE(store.goals(), QStringLiteral("local π\n"));
+        QFile disk(store.dataDirectory() + QStringLiteral("/goals.md"));
+        QVERIFY(disk.open(QIODevice::ReadOnly));
+        QCOMPARE(disk.readAll(), QByteArray("external\n"));
+        const auto copies =
+            QDir(store.dataDirectory()).entryList({QStringLiteral("goals.md.local-conflict-*.md")});
+        QCOMPARE(copies.size(), 1);
+        QFile copy(store.dataDirectory() + QLatin1Char('/') + copies.first());
+        QVERIFY(copy.open(QIODevice::ReadOnly));
+        QCOMPARE(copy.readAll(), QStringLiteral("local π\n").toUtf8());
+        copy.close();
+        store.setDocument(QStringLiteral("goals"), QStringLiteral("local π plus\n"));
+        QVERIFY(!store.flush());
+        QVERIFY(copy.open(QIODevice::ReadOnly));
+        QCOMPARE(copy.readAll(), QStringLiteral("local π plus\n").toUtf8());
+    }
+    void invalidExternalFileIsPreserved() {
+        DocumentStore store;
+        store.setDocument(QStringLiteral("notes"), QStringLiteral("valid\n"));
+        QVERIFY(store.flush());
+        QFile external(store.dataDirectory() + QStringLiteral("/notes.md"));
+        QVERIFY(external.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(external.write(QByteArray::fromHex("fffe")), 2LL);
+        external.close();
+        store.scanExternalChanges();
+        QVERIFY(!store.error().isEmpty());
+        QCOMPARE(store.notes(), QStringLiteral("valid\n"));
+        store.setDocument(QStringLiteral("notes"), QStringLiteral("local\n"));
+        QVERIFY(!store.flush());
+        QVERIFY(store.conflicted());
+        QVERIFY(external.open(QIODevice::ReadOnly));
+        QCOMPARE(external.readAll(), QByteArray::fromHex("fffe"));
+    }
+    void invalidExternalFileCanRecoverWithoutRestart() {
+        DocumentStore store;
+        store.setDocument(QStringLiteral("notes"), QStringLiteral("before\n"));
+        QVERIFY(store.flush());
+        QFile file(store.dataDirectory() + QStringLiteral("/notes.md"));
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(file.write(QByteArray::fromHex("ff")), 1LL);
+        file.close();
+        store.scanExternalChanges();
+        QVERIFY(!store.error().isEmpty());
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(file.write("before\n"), 7LL);
+        file.close();
+        store.scanExternalChanges();
+        QVERIFY(store.error().isEmpty());
+        store.setDocument(QStringLiteral("notes"), QStringLiteral("after\n"));
+        QVERIFY(store.flush());
+    }
+    void externalDeletionReloadsCleanDocument() {
+        DocumentStore store;
+        store.setDocument(QStringLiteral("goals"), QStringLiteral("hello\n"));
+        QVERIFY(store.flush());
+        QVERIFY(QFile::remove(store.dataDirectory() + QStringLiteral("/goals.md")));
+        store.scanExternalChanges();
+        QCOMPARE(store.goals(), QString());
+        QVERIFY(!store.unsaved());
+    }
+    void externalCreationAfterEmptyStartup() {
+        DocumentStore store;
+        QVERIFY(QDir().mkpath(store.dataDirectory()));
+        QFile file(store.dataDirectory() + QStringLiteral("/goals.md"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write("new\n"), 4LL);
+        file.close();
+        QTRY_COMPARE_WITH_TIMEOUT(store.goals(), QStringLiteral("new\n"), 2000);
+    }
+    void permissionFailureRetainsDirtyText() {
+        if (geteuid() == 0)
+            QSKIP("Root bypasses directory write permissions");
+        DocumentStore store;
+        QVERIFY(QDir().mkpath(store.dataDirectory()));
+        QFile directory(store.dataDirectory());
+        QVERIFY(directory.setPermissions(QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+        store.setDocument(QStringLiteral("notes"), QStringLiteral("protected"));
+        const bool saved = store.flush();
+        QVERIFY(directory.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                         QFileDevice::ExeOwner));
+        QVERIFY(!saved);
+        QVERIFY(store.unsaved());
+        QVERIFY(store.flush());
+        QCOMPARE(store.notes(), QStringLiteral("protected"));
     }
     void settingsPersist() {
         {
@@ -91,6 +206,7 @@ class CoreTests : public QObject {
             a.setCorner(QStringLiteral("bottom-left"));
             a.setTopMargin(90);
             a.setRightMargin(80);
+            QVERIFY(a.sync());
         }
         SettingsManager b;
         QCOMPARE(b.zoom(), 23);
@@ -103,6 +219,21 @@ class CoreTests : public QObject {
         QCOMPARE(b.rightMargin(), 80);
         b.setCompact(false);
         QCOMPARE(b.height(), 700);
+    }
+    void invalidSettingsStayWithinBounds() {
+        QSettings raw(QStringLiteral("Focusboard"), QStringLiteral("Focusboard"));
+        raw.setValue(QStringLiteral("zoom"), 999);
+        raw.setValue(QStringLiteral("width"), -50);
+        raw.setValue(QStringLiteral("height"), 9999);
+        raw.setValue(QStringLiteral("theme"), QStringLiteral("invalid"));
+        raw.setValue(QStringLiteral("corner"), QStringLiteral("invalid"));
+        raw.sync();
+        SettingsManager settings;
+        QCOMPARE(settings.zoom(), 32);
+        QCOMPARE(settings.width(), 280);
+        QCOMPARE(settings.height(), 900);
+        QCOMPARE(settings.theme(), QStringLiteral("system"));
+        QCOMPARE(settings.corner(), QStringLiteral("top-right"));
     }
     void autostartFile() {
         AutostartManager a;

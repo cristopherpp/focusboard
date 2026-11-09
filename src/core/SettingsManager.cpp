@@ -12,7 +12,9 @@ bool SettingsManager::systemDark() const {
     auto *app = qobject_cast<QGuiApplication *>(QCoreApplication::instance());
     return app && app->styleHints()->colorScheme() == Qt::ColorScheme::Dark;
 }
-int SettingsManager::zoom() const { return m_settings.value(QStringLiteral("zoom"), 16).toInt(); }
+int SettingsManager::zoom() const {
+    return std::clamp(m_settings.value(QStringLiteral("zoom"), 16).toInt(), 10, 32);
+}
 void SettingsManager::setZoom(int v) {
     v = std::clamp(v, 10, 32);
     if (v == zoom())
@@ -21,7 +23,11 @@ void SettingsManager::setZoom(int v) {
     emit zoomChanged();
 }
 QString SettingsManager::theme() const {
-    return m_settings.value(QStringLiteral("theme"), QStringLiteral("system")).toString();
+    const QString value = m_settings.value(QStringLiteral("theme"), QStringLiteral("system")).toString();
+    return QStringList{QStringLiteral("system"), QStringLiteral("light"), QStringLiteral("dark")}.contains(
+               value)
+               ? value
+               : QStringLiteral("system");
 }
 void SettingsManager::setTheme(const QString &v) {
     if (!QStringList{QStringLiteral("system"), QStringLiteral("light"), QStringLiteral("dark")}.contains(v) ||
@@ -31,7 +37,12 @@ void SettingsManager::setTheme(const QString &v) {
     emit themeChanged();
 }
 QString SettingsManager::corner() const {
-    return m_settings.value(QStringLiteral("corner"), QStringLiteral("top-right")).toString();
+    const QString value = m_settings.value(QStringLiteral("corner"), QStringLiteral("top-right")).toString();
+    return QStringList{QStringLiteral("top-left"), QStringLiteral("top-right"), QStringLiteral("bottom-left"),
+                       QStringLiteral("bottom-right")}
+                   .contains(value)
+               ? value
+               : QStringLiteral("top-right");
 }
 void SettingsManager::setCorner(const QString &v) {
     if (!QStringList{QStringLiteral("top-left"), QStringLiteral("top-right"), QStringLiteral("bottom-left"),
@@ -50,7 +61,9 @@ void SettingsManager::setCompact(bool v) {
     m_settings.setValue(QStringLiteral("compact"), v);
     emit compactChanged();
 }
-int SettingsManager::width() const { return m_settings.value(QStringLiteral("width"), 360).toInt(); }
+int SettingsManager::width() const {
+    return std::clamp(m_settings.value(QStringLiteral("width"), 360).toInt(), 280, 720);
+}
 void SettingsManager::setWidth(int v) {
     v = std::clamp(v, 280, 720);
     if (v == width())
@@ -58,7 +71,9 @@ void SettingsManager::setWidth(int v) {
     m_settings.setValue(QStringLiteral("width"), v);
     emit sizeChanged();
 }
-int SettingsManager::height() const { return m_settings.value(QStringLiteral("height"), 440).toInt(); }
+int SettingsManager::height() const {
+    return std::clamp(m_settings.value(QStringLiteral("height"), 440).toInt(), 260, 900);
+}
 void SettingsManager::setHeight(int v) {
     v = std::clamp(v, 260, 900);
     if (v == height())
@@ -77,7 +92,7 @@ void SettingsManager::setMargin(int v) {
     emit marginChanged();
 }
 int SettingsManager::topMargin() const {
-    return m_settings.value(QStringLiteral("topMargin"), margin()).toInt();
+    return std::clamp(m_settings.value(QStringLiteral("topMargin"), margin()).toInt(), 0, 10000);
 }
 void SettingsManager::setTopMargin(int v) {
     v = std::clamp(v, 0, 10000);
@@ -87,7 +102,7 @@ void SettingsManager::setTopMargin(int v) {
     emit positionChanged();
 }
 int SettingsManager::rightMargin() const {
-    return m_settings.value(QStringLiteral("rightMargin"), margin()).toInt();
+    return std::clamp(m_settings.value(QStringLiteral("rightMargin"), margin()).toInt(), 0, 10000);
 }
 void SettingsManager::setRightMargin(int v) {
     v = std::clamp(v, 0, 10000);
@@ -98,6 +113,10 @@ void SettingsManager::setRightMargin(int v) {
 }
 bool SettingsManager::autostart() const {
     return m_settings.value(QStringLiteral("autostart"), false).toBool();
+}
+bool SettingsManager::sync() {
+    m_settings.sync();
+    return m_settings.status() == QSettings::NoError;
 }
 void SettingsManager::setAutostart(bool v) {
     if (v == autostart())

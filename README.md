@@ -2,6 +2,8 @@
 
 A quiet Markdown gadget for KDE Plasma 6 on Wayland. It sits on the desktop; ordinary windows cover it. Goals and notes stay in local files.
 
+Focusboard supports KDE Plasma 6 Wayland with KWin and LayerShellQt. Other desktops and X11 are untested or unsupported. It uses C++20, Qt Quick/QML, LayerShellQt, QSettings, and plain Markdown files. No screenshot is bundled yet.
+
 ## Install on Arch Linux
 
 From this directory, as your normal user:
@@ -40,6 +42,8 @@ Task numbers start at 1 in the current `goals.md` source order. While editing, *
 
 The usual data files are `~/.local/share/Focusboard/Focusboard/goals.md` and `notes.md`; settings are in `~/.config/Focusboard/Focusboard.conf`. Qt follows `XDG_DATA_HOME` and `XDG_CONFIG_HOME` if set. Focusboard saves Markdown as UTF-8 using atomic writes. It has no network service or telemetry.
 
+Clean external edits reload automatically. If a file changes while Focusboard has unsaved edits, it keeps the external file, writes a `*.local-conflict-*.md` copy of the local text beside it, and shows an error. Resolve both versions manually; Focusboard will not guess a merge. A failed save remains dirty and is retried up to three times. Quit asks before discarding unsaved changes.
+
 ## Build from source
 
 Dependencies: Qt 6.8+, LayerShellQt, CMake, Ninja, and a C++20 compiler.
@@ -64,6 +68,10 @@ done
 
 The package installs the SVG at `/usr/share/icons/hicolor/scalable/apps/focusboard.svg` and PNGs in matching hicolor directories.
 
-Focusboard uses LayerShellQt's bottom layer with no reserved workspace. Visibility and stacking depend on KWin and should be checked in the target KDE Wayland session, especially with multiple monitors. Offscreen tests do not verify compositor behavior.
+Focusboard uses LayerShellQt's bottom layer with no reserved workspace. Visibility and stacking depend on KWin and should be checked in the target KDE Wayland session, especially with multiple monitors. It cannot cover the lock screen or compositor-controlled overlays. Offscreen tests do not verify compositor behavior.
 
-Local package and AUR template details are in [packaging/README.md](packaging/README.md). No public Git remote is configured yet.
+To test manually, expose the desktop and overlap the gadget with a normal window; then check dragging, resizing, hide/show, autostart after login, and monitor or scale changes. The automated tests use temporary data directories and do not touch your documents.
+
+The repository is [on GitHub](https://github.com/cristopherpp/focusboard). CI builds and tests in an Arch container; its compositor behavior still needs a KDE session. See [CONTRIBUTING.md](CONTRIBUTING.md) for pull requests, [CHANGELOG.md](CHANGELOG.md) for version policy, and [PERFORMANCE.md](PERFORMANCE.md) for profiling notes.
+
+The `focusboard-git` AUR recipe is prepared in `packaging/aur/focusboard-git/`. Once submitted to AUR, install it with `yay -S focusboard-git`, or clone its AUR Git repository and run `makepkg -si` as your normal user. See [packaging/README.md](packaging/README.md) for packaging and submission steps. It has not been published to AUR by this repository.

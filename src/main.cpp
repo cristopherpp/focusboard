@@ -5,6 +5,7 @@
 #include "integration/AutostartManager.hpp"
 #include <QApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QLockFile>
 #include <QMenu>
 #include <QMessageBox>
@@ -16,10 +17,13 @@
 #include <QSystemTrayIcon>
 
 int main(int argc, char **argv) {
+    QElapsedTimer startup;
+    startup.start();
     qputenv("QT_WAYLAND_SHELL_INTEGRATION", QByteArrayLiteral("layer-shell"));
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("Focusboard"));
     app.setOrganizationName(QStringLiteral("Focusboard"));
+    app.setApplicationVersion(QStringLiteral(FOCUSBOARD_VERSION));
     app.setDesktopFileName(QStringLiteral("focusboard"));
     app.setQuitOnLastWindowClosed(false);
     if (!app.platformName().startsWith(QStringLiteral("wayland"))) {
@@ -40,6 +44,9 @@ int main(int argc, char **argv) {
     LayerShellWindowController controller(&settings);
     CommandController commands(&documents, &settings);
     QQmlApplicationEngine engine;
+    const bool profileStartup = qEnvironmentVariableIsSet("FOCUSBOARD_PROFILE_STARTUP");
+    if (profileStartup)
+        qInfo("Focusboard bootstrap: %lld ms", startup.elapsed());
     engine.setInitialProperties({{QStringLiteral("documents"), QVariant::fromValue(&documents)},
                                  {QStringLiteral("settings"), QVariant::fromValue(&settings)},
                                  {QStringLiteral("layerController"), QVariant::fromValue(&controller)},
@@ -50,6 +57,8 @@ int main(int argc, char **argv) {
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
     if (!window || !controller.initialize(window))
         return 1;
+    if (profileStartup)
+        qInfo("Focusboard window initialized: %lld ms", startup.elapsed());
     QSystemTrayIcon tray(
         QIcon::fromTheme(QStringLiteral("focusboard"), app.style()->standardIcon(QStyle::SP_DesktopIcon)));
     tray.setToolTip(QStringLiteral("Focusboard — Ctrl+K for commands"));
@@ -58,13 +67,29 @@ int main(int argc, char **argv) {
         window->requestActivate();
     };
     auto hideWindow = [&] {
-        documents.flush();
-        if (QSystemTrayIcon::isSystemTrayAvailable())
+        const bool saved = documents.flush();
+        if (QSystemTrayIcon::isSystemTrayAvailable()) {
             window->hide();
-        else
+            if (!saved)
+                tray.showMessage(QStringLiteral("Focusboard: unsaved changes"), documents.error(),
+                                 QSystemTrayIcon::Warning);
+        } else
             QMessageBox::information(nullptr, QStringLiteral("Focusboard"),
                                      QStringLiteral("The system tray is unavailable. Focusboard will stay "
                                                     "visible so you can reach it. Use :quit to exit."));
+    };
+    auto requestQuit = [&] {
+        const bool documentsSaved = documents.flush();
+        const bool settingsSaved = settings.sync();
+        const QString failure = (documentsSaved ? QString() : documents.error()) +
+                                (settingsSaved ? QString() : QStringLiteral("\nCannot save settings."));
+        if ((!documentsSaved || !settingsSaved) &&
+            QMessageBox::warning(nullptr, QStringLiteral("Focusboard: unsaved changes"),
+                                 failure + QStringLiteral("\n\nQuit anyway?"),
+                                 QMessageBox::Cancel | QMessageBox::Yes,
+                                 QMessageBox::Cancel) != QMessageBox::Yes)
+            return;
+        app.quit();
     };
     QMenu menu;
     QObject::connect(menu.addAction(QStringLiteral("Show Focusboard")), &QAction::triggered, window,
@@ -84,8 +109,7 @@ int main(int argc, char **argv) {
         }
     });
     menu.addSeparator();
-    QObject::connect(menu.addAction(QStringLiteral("Quit")), &QAction::triggered, &app,
-                     &QCoreApplication::quit);
+    QObject::connect(menu.addAction(QStringLiteral("Quit")), &QAction::triggered, &app, requestQuit);
     tray.setContextMenu(&menu);
     QObject::connect(&tray, &QSystemTrayIcon::activated, window,
                      [showWindow](QSystemTrayIcon::ActivationReason reason) {
@@ -93,11 +117,19 @@ int main(int argc, char **argv) {
                              showWindow();
                      });
     QObject::connect(&commands, &CommandController::hideRequested, window, hideWindow);
-    QObject::connect(&commands, &CommandController::quitRequested, &app, &QCoreApplication::quit);
-    QObject::connect(&app, &QCoreApplication::aboutToQuit, &documents, &DocumentStore::flush);
+    QObject::connect(&commands, &CommandController::quitRequested, &app, requestQuit);
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &documents, [&] {
+        if (!documents.flush())
+            qCritical("Focusboard could not flush documents during shutdown: %s",
+                      qPrintable(documents.error()));
+        if (!settings.sync())
+            qCritical("Focusboard could not save settings during shutdown.");
+    });
     tray.show();
     if (!autostartReady)
         tray.showMessage(QStringLiteral("Autostart"), autostart.error(), QSystemTrayIcon::Warning);
     window->show();
+    if (profileStartup)
+        qInfo("Focusboard startup to first window show: %lld ms", startup.elapsed());
     return app.exec();
 }
