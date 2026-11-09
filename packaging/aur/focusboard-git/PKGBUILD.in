@@ -1,0 +1,43 @@
+# Configure BOTH real upstream URLs before renaming this file to PKGBUILD.
+# This template intentionally cannot fetch an invented repository.
+pkgname=focusboard-git
+pkgver=0.r0.g0000000
+pkgrel=1
+pkgdesc='Minimal Markdown goals and notes gadget for the KDE Wayland desktop (Git version)'
+arch=('x86_64')
+url='@UPSTREAM_PROJECT_URL@'
+license=('MIT')
+depends=('glibc' 'libgcc' 'libstdc++' 'libglvnd' 'qt6-base>=6.8'
+         'qt6-declarative>=6.8' 'qt6-wayland' 'qt6-svg' 'layer-shell-qt>=6.6' 'hicolor-icon-theme')
+makedepends=('cmake' 'ninja' 'git')
+checkdepends=('ttf-font')
+provides=('focusboard')
+conflicts=('focusboard')
+source=('focusboard::git+@UPSTREAM_GIT_URL@')
+sha256sums=('SKIP') # VCS sources are mutable; release snapshots use real checksums.
+options=('!debug')
+
+pkgver() {
+    cd "$srcdir/focusboard"
+    if git describe --long --tags --match 'v[0-9]*' >/dev/null 2>&1; then
+        git describe --long --tags --match 'v[0-9]*' | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+    else
+        printf '0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+    fi
+}
+
+build() {
+    cmake -S focusboard -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_TESTING=ON
+    cmake --build build --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
+}
+
+check() {
+    QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+        ctest --test-dir build --output-on-failure
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+}

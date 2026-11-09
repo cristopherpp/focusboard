@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Focusboard
+Comment=Markdown goals and notes desktop gadget
+Exec=focusboard
+TryExec=focusboard
+Icon=focusboard
+Terminal=false
+Categories=Utility;
+StartupNotify=false
+Keywords=Markdown;Goals;Notes;Desktop;

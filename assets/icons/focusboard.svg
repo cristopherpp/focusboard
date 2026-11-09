@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" role="img" aria-label="Focusboard app icon">
+  <defs>
+    <linearGradient id="navy" x1="512" y1="96" x2="512" y2="310" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#173E77"/>
+      <stop offset="1" stop-color="#123462"/>
+    </linearGradient>
+    <clipPath id="page">
+      <rect x="96" y="96" width="832" height="832" rx="174"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#page)">
+    <rect x="96" y="96" width="832" height="832" fill="#FAF9F6"/>
+    <path d="M96 96H928V310H96Z" fill="url(#navy)"/>
+    <g stroke="#C8C8C6" stroke-width="8" stroke-linecap="round">
+      <path d="M167 465H857"/>
+      <path d="M167 621H857"/>
+      <path d="M167 778H857"/>
+    </g>
+    <!-- Single continuous handwritten lower-case f. -->
+    <path d="M677 419
+      C682 391 657 351 625 351
+      C555 347 514 460 486 573
+      C460 685 417 806 352 808
+      C315 809 307 775 322 765"
+      stroke="#202020" stroke-width="62" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Hand-drawn horizontal cross stroke. -->
+    <path d="M388 605C480 586 573 577 682 580" stroke="#202020" stroke-width="49" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,3 @@
+#pragma once
+// Installation identity only; never a source/build directory.
+#define FOCUSBOARD_INSTALL_EXECUTABLE "@CMAKE_INSTALL_FULL_BINDIR@/focusboard"

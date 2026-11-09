@@ -1,0 +1,33 @@
+# Local release recipe. install-arch.sh supplies the version and archive checksum.
+pkgname=focusboard
+pkgver=@PKGVER@
+pkgrel=3
+pkgdesc='Minimal Markdown goals and notes gadget for the KDE Wayland desktop'
+arch=('x86_64')
+# No public upstream URL has been configured yet.
+license=('MIT')
+depends=('glibc' 'libgcc' 'libstdc++' 'libglvnd' 'qt6-base>=6.8'
+         'qt6-declarative>=6.8' 'qt6-wayland' 'qt6-svg' 'layer-shell-qt>=6.6' 'hicolor-icon-theme')
+makedepends=('cmake' 'ninja')
+checkdepends=('ttf-font')
+source=("focusboard-${pkgver}.tar.xz")
+sha256sums=('@SOURCE_SHA256@')
+options=('!debug')
+
+build() {
+    cmake -S "focusboard-${pkgver}" -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DBUILD_TESTING=ON
+    cmake --build build --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
+}
+
+check() {
+    QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+        ctest --test-dir build --output-on-failure
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+}

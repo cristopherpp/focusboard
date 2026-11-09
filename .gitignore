@@ -1,0 +1,14 @@
+/build*/
+CMakeUserPresets.json
+*.pkg.tar.*
+*.src.tar.*
+/.agents/
+/.aws/
+/.codex/
+.cache/
+__pycache__/
+*.log
+*.swp
+*.swo
+*~
+.SRCINFO
