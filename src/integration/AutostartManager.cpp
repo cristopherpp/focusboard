@@ -5,7 +5,6 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
-#include <QSettings>
 #include <QStandardPaths>
 
 namespace {
@@ -29,6 +28,22 @@ QString AutostartManager::entryPath() const {
     return QDir(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation))
         .filePath(QStringLiteral("autostart/focusboard.desktop"));
 }
+QStringList AutostartManager::legacyPaths() const {
+    const QDir directory(QFileInfo(entryPath()).absolutePath());
+    return {directory.filePath(QStringLiteral("focusboard-gadget.desktop")),
+            directory.filePath(QStringLiteral("Focusboard.desktop"))};
+}
+bool AutostartManager::isInstalled() const {
+    return QDir::cleanPath(m_executable) == QDir::cleanPath(m_installedExecutable);
+}
+bool AutostartManager::hasConfiguration() const {
+    if (QFileInfo::exists(entryPath()))
+        return true;
+    for (const QString &path : legacyPaths())
+        if (QFileInfo::exists(path))
+            return true;
+    return false;
+}
 bool AutostartManager::fail(const QString &message) {
     if (m_error != message) {
         m_error = message;
@@ -37,12 +52,39 @@ bool AutostartManager::fail(const QString &message) {
     return false;
 }
 bool AutostartManager::isEnabled() const {
-    if (!QFile::exists(entryPath()))
+    QString path = entryPath();
+    if (!QFileInfo::exists(path)) {
+        for (const QString &legacy : legacyPaths())
+            if (QFileInfo::exists(legacy)) {
+                path = legacy;
+                break;
+            }
+    }
+    if (!QFileInfo::exists(path))
         return false;
-    QSettings entry(entryPath(), QSettings::IniFormat);
-    entry.beginGroup(QStringLiteral("Desktop Entry"));
-    return !entry.value(QStringLiteral("Hidden"), false).toBool() &&
-           entry.value(QStringLiteral("X-GNOME-Autostart-enabled"), true).toBool();
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    bool inEntry = false, foundExec = false, hidden = false, gnomeEnabled = true, kdeEnabled = true;
+    for (const QByteArray &raw : file.readAll().split('\n')) {
+        const QByteArray line = raw.trimmed();
+        if (line.startsWith('[')) {
+            inEntry = line == "[Desktop Entry]";
+            continue;
+        }
+        if (!inEntry)
+            continue;
+        if (line.startsWith("Exec="))
+            foundExec = !line.mid(5).isEmpty();
+        else if (line.startsWith("Hidden="))
+            hidden = line.mid(7).toLower() == "true";
+        else if (line.startsWith("X-GNOME-Autostart-enabled="))
+            gnomeEnabled =
+                line.mid(QByteArrayLiteral("X-GNOME-Autostart-enabled=").size()).toLower() != "false";
+        else if (line.startsWith("X-KDE-autostart-enabled="))
+            kdeEnabled = line.mid(QByteArrayLiteral("X-KDE-autostart-enabled=").size()).toLower() != "false";
+    }
+    return foundExec && !hidden && gnomeEnabled && kdeEnabled;
 }
 QString AutostartManager::desktopEntry(const QString &executable) {
     QString tryExec = executable;
@@ -69,25 +111,91 @@ bool AutostartManager::save(const QString &text) {
     return true;
 }
 bool AutostartManager::setEnabled(bool enabled) {
+    if (!migrateExistingEntry())
+        return false;
     if (enabled) {
         if (m_executable.contains(QLatin1Char('\n')) || m_executable.contains(QLatin1Char('\r')))
             return fail(tr("Cannot create an autostart entry for an executable path containing a newline."));
-        return save(desktopEntry(m_executable));
+        if (!QFileInfo::exists(entryPath())) {
+            if (!save(desktopEntry(m_executable)))
+                return false;
+        } else if (!setEntryEnabled(entryPath(), true))
+            return false;
+    } else if (QFileInfo::exists(entryPath()) && !setEntryEnabled(entryPath(), false)) {
+        return false;
     }
-    if (QFile::exists(entryPath()) && !QFile::remove(entryPath()))
-        return fail(tr("Cannot remove autostart entry: %1").arg(entryPath()));
     if (!m_error.isEmpty()) {
         m_error.clear();
         emit errorChanged();
     }
+    emit stateChanged();
+    return true;
+}
+bool AutostartManager::setEntryEnabled(const QString &path, bool enabled) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return fail(tr("Cannot read autostart entry: %1").arg(file.errorString()));
+    const QByteArray original = file.readAll();
+    if (file.error() != QFileDevice::NoError)
+        return fail(tr("Cannot read autostart entry: %1").arg(file.errorString()));
+    file.close();
+    QList<QByteArray> lines = original.split('\n');
+    bool inEntry = false, foundSection = false, foundHidden = false;
+    qsizetype section = -1;
+    for (qsizetype index = 0; index < lines.size(); ++index) {
+        QByteArray &line = lines[index];
+        const QByteArray trimmed = line.trimmed();
+        if (trimmed.startsWith('[')) {
+            inEntry = trimmed == "[Desktop Entry]";
+            if (inEntry) {
+                foundSection = true;
+                section = index;
+            }
+        }
+        if (!inEntry)
+            continue;
+        const QByteArray ending = line.endsWith('\r') ? QByteArray("\r") : QByteArray();
+        if (line.startsWith("Hidden=")) {
+            line = QByteArray("Hidden=") + (enabled ? "false" : "true") + ending;
+            foundHidden = true;
+        } else if (enabled && line.startsWith("X-GNOME-Autostart-enabled=")) {
+            line = QByteArray("X-GNOME-Autostart-enabled=true") + ending;
+        } else if (enabled && line.startsWith("X-KDE-autostart-enabled=")) {
+            line = QByteArray("X-KDE-autostart-enabled=true") + ending;
+        }
+    }
+    if (!foundSection)
+        return fail(tr("Autostart entry has no [Desktop Entry] section: %1").arg(path));
+    if (!foundHidden)
+        lines.insert(section + 1, QByteArray("Hidden=") + (enabled ? "false" : "true") +
+                                      (lines[section].endsWith('\r') ? "\r" : ""));
+    const QByteArray updated = lines.join('\n');
+    if (updated == original)
+        return true;
+    QSaveFile replacement(path);
+    if (!replacement.open(QIODevice::WriteOnly) || replacement.write(updated) != updated.size() ||
+        !replacement.commit())
+        return fail(tr("Cannot update autostart entry: %1").arg(replacement.errorString()));
     return true;
 }
 bool AutostartManager::migrateExistingEntry() {
     // Never enable login startup implicitly, or redirect an installed entry back into a developer build.
-    if (QDir::cleanPath(m_executable) != QDir::cleanPath(m_installedExecutable) ||
-        !QFile::exists(entryPath()))
+    if (!isInstalled())
         return true;
-    QFile file(entryPath());
+    const QString canonical = entryPath();
+    for (const QString &legacy : legacyPaths()) {
+        if (!QFileInfo::exists(legacy))
+            continue;
+        if (!QFileInfo::exists(canonical)) {
+            if (!QFile::rename(legacy, canonical))
+                return fail(tr("Cannot migrate legacy autostart entry: %1").arg(legacy));
+        } else if (!setEntryEnabled(legacy, false)) {
+            return false;
+        }
+    }
+    if (!QFileInfo::exists(canonical))
+        return true;
+    QFile file(canonical);
     if (!file.open(QIODevice::ReadOnly))
         return fail(tr("Cannot read autostart entry: %1").arg(file.errorString()));
     const QString original = QString::fromUtf8(file.readAll());
@@ -123,5 +231,8 @@ bool AutostartManager::migrateExistingEntry() {
     }
     const QString updated = lines.join(QLatin1Char('\n'));
     // Preserve Hidden, KDE/GNOME disable flags, conditions, and other user customizations.
-    return updated == original || save(updated);
+    const bool saved = updated == original || save(updated);
+    if (saved)
+        emit stateChanged();
+    return saved;
 }

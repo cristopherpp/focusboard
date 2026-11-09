@@ -237,10 +237,126 @@ class CoreTests : public QObject {
     }
     void autostartFile() {
         AutostartManager a;
+        QVERIFY(!a.hasConfiguration());
         QVERIFY(a.setEnabled(true));
         QVERIFY(a.isEnabled());
         QVERIFY(a.setEnabled(false));
         QVERIFY(!a.isEnabled());
+        QVERIFY(a.hasConfiguration());
+    }
+    void freshAutostartDecisionsPersist() {
+        SettingsManager settings;
+        AutostartManager autostart(QStringLiteral("/usr/bin/focusboard"),
+                                   QStringLiteral("/usr/bin/focusboard"));
+        QVERIFY(!settings.hasAutostartPreference());
+        QVERIFY(!autostart.hasConfiguration());
+        QVERIFY(autostart.setEnabled(true));
+        settings.setAutostart(true);
+        QVERIFY(settings.sync());
+        AutostartManager restored(QStringLiteral("/usr/bin/focusboard"),
+                                  QStringLiteral("/usr/bin/focusboard"));
+        SettingsManager restoredSettings;
+        QVERIFY(restored.hasConfiguration());
+        QVERIFY(restored.isEnabled());
+        QVERIFY(restored.setEnabled(true));
+        QCOMPARE(QDir(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) +
+                      QStringLiteral("/autostart"))
+                     .entryList({QStringLiteral("*.desktop")}, QDir::Files)
+                     .size(),
+                 1);
+        QVERIFY(restoredSettings.hasAutostartPreference());
+        QVERIFY(restoredSettings.autostart());
+        QVERIFY2(restored.setEnabled(false), qPrintable(restored.error()));
+        restoredSettings.setAutostart(false);
+        QVERIFY(restoredSettings.sync());
+        QVERIFY(restored.hasConfiguration());
+        QVERIFY(!restored.isEnabled());
+    }
+    void decliningFreshAutostartDoesNotCreateEntry() {
+        SettingsManager settings;
+        AutostartManager autostart(QStringLiteral("/usr/bin/focusboard"),
+                                   QStringLiteral("/usr/bin/focusboard"));
+        settings.setAutostart(false);
+        QVERIFY(settings.sync());
+        QVERIFY(!autostart.hasConfiguration());
+        SettingsManager restored;
+        QVERIFY(restored.hasAutostartPreference());
+        QVERIFY(!restored.autostart());
+    }
+    void legacyAutostartMigratesWithoutDuplicates() {
+        const QString directory =
+            QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/autostart");
+        QVERIFY(QDir().mkpath(directory));
+        QFile legacy(directory + QStringLiteral("/focusboard-gadget.desktop"));
+        QVERIFY(legacy.open(QIODevice::WriteOnly));
+        legacy.write("[Desktop Entry]\nName=Focusboard\nExec=/tmp/old-focusboard\nHidden=true\n");
+        legacy.close();
+        AutostartManager manager(QStringLiteral("/usr/bin/focusboard"),
+                                 QStringLiteral("/usr/bin/focusboard"));
+        QVERIFY2(manager.migrateExistingEntry(), qPrintable(manager.error()));
+        QVERIFY(!legacy.exists());
+        QVERIFY(manager.hasConfiguration());
+        QVERIFY(!manager.isEnabled());
+        const QString canonical = directory + QStringLiteral("/focusboard.desktop");
+        QVERIFY(QFile::exists(canonical));
+        QVERIFY(manager.setEnabled(true));
+        QVERIFY(manager.isEnabled());
+        QVERIFY2(manager.migrateExistingEntry(), qPrintable(manager.error()));
+        QCOMPARE(QDir(directory).entryList({QStringLiteral("*.desktop")}, QDir::Files).size(), 1);
+        QFile duplicate(directory + QStringLiteral("/Focusboard.desktop"));
+        QVERIFY(duplicate.open(QIODevice::WriteOnly));
+        duplicate.write("[Desktop Entry]\nName=Focusboard\nExec=/tmp/legacy\n");
+        duplicate.close();
+        QVERIFY(manager.migrateExistingEntry());
+        QSettings disabled(duplicate.fileName(), QSettings::IniFormat);
+        disabled.beginGroup(QStringLiteral("Desktop Entry"));
+        QVERIFY(disabled.value(QStringLiteral("Hidden")).toBool());
+        QVERIFY(manager.isEnabled());
+    }
+    void invalidAutostartDirectoryReportsError() {
+        const QString path =
+            QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/autostart");
+        QFile blocker(path);
+        QVERIFY(blocker.open(QIODevice::WriteOnly));
+        blocker.close();
+        AutostartManager manager(QStringLiteral("/usr/bin/focusboard"),
+                                 QStringLiteral("/usr/bin/focusboard"));
+        QVERIFY(!manager.setEnabled(true));
+        QVERIFY(!manager.error().isEmpty());
+        QVERIFY(!manager.hasConfiguration());
+    }
+    void malformedAutostartEntryIsNotReplaced() {
+        const QString directory =
+            QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/autostart");
+        QVERIFY(QDir().mkpath(directory));
+        QFile entry(directory + QStringLiteral("/focusboard.desktop"));
+        QVERIFY(entry.open(QIODevice::WriteOnly));
+        const QByteArray original("[Desktop Entry]\nHidden=true\n");
+        QCOMPARE(entry.write(original), original.size());
+        entry.close();
+        AutostartManager manager(QStringLiteral("/usr/bin/focusboard"),
+                                 QStringLiteral("/usr/bin/focusboard"));
+        QVERIFY(!manager.migrateExistingEntry());
+        QVERIFY(!manager.error().isEmpty());
+        QVERIFY(!manager.setEnabled(true));
+        QVERIFY(entry.open(QIODevice::ReadOnly));
+        QCOMPARE(entry.readAll(), original);
+    }
+    void unwritableAutostartDirectoryReportsError() {
+        if (geteuid() == 0)
+            QSKIP("Root bypasses directory write permissions");
+        const QString path =
+            QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/autostart");
+        QVERIFY(QDir().mkpath(path));
+        QFile directory(path);
+        QVERIFY(directory.setPermissions(QFileDevice::ReadOwner | QFileDevice::ExeOwner));
+        AutostartManager manager(QStringLiteral("/usr/bin/focusboard"),
+                                 QStringLiteral("/usr/bin/focusboard"));
+        const bool enabled = manager.setEnabled(true);
+        QVERIFY(directory.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                         QFileDevice::ExeOwner));
+        QVERIFY(!enabled);
+        QVERIFY(!manager.error().isEmpty());
     }
     void installedAutostartMigration() {
         const QString path = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) +
@@ -277,8 +393,9 @@ class CoreTests : public QObject {
         entry.close();
         QVERIFY(installed.setEnabled(true));
         QVERIFY(installed.isEnabled());
-        QVERIFY(installed.setEnabled(false));
-        QVERIFY(!QFile::exists(path));
+        QVERIFY2(installed.setEnabled(false), qPrintable(installed.error()));
+        QVERIFY(QFile::exists(path));
+        QVERIFY(!installed.isEnabled());
     }
     void autostartExecutableEscaping() {
         const auto entry = AutostartManager::desktopEntry(QStringLiteral("/tmp/a b/100%/focusboard"));

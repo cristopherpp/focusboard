@@ -9,6 +9,9 @@ ApplicationWindow {
     required property SettingsManager settings
     required property CommandController commands
     required property LayerShellWindowController layerController
+    required property AutostartManager autostartManager
+    required property bool offerAutostart
+    property string autostartPromptError: ""
     visible: false // C++ configures the surface before the first map.
     title: "Focusboard"
     flags: Qt.FramelessWindowHint
@@ -30,8 +33,26 @@ ApplicationWindow {
         content.forceActiveFocus()
     }
     function openCommands() { palettePopup.open() }
+    function decideAutostart(enabled) {
+        if (!root.autostartManager.setEnabled(enabled)) {
+            root.autostartPromptError = root.autostartManager.error
+            return
+        }
+        root.settings.autostart = enabled
+        if (!root.settings.sync()) {
+            root.autostartPromptError = "Could not save your preference."
+            return
+        }
+        root.offerAutostart = false
+        autostartPrompt.close()
+    }
     onClosing: function(event) { event.accepted = false; root.commands.execute(":hide") }
-    onVisibleChanged: if (!visible) root.documents.flush()
+    onVisibleChanged: {
+        if (!visible) root.documents.flush()
+        else if (root.offerAutostart) Qt.callLater(function() {
+            if (root.visible && root.offerAutostart) autostartPrompt.open()
+        })
+    }
     Connections {
         target: root.commands
         function onEditRequested(document) {
@@ -156,6 +177,70 @@ ApplicationWindow {
         width: root.width - 32
         x: 16; y: 16
         onClosed: if (root.editing !== "") editor.forceActiveFocus(); else content.forceActiveFocus()
+    }
+    Popup {
+        id: autostartPrompt
+        objectName: "autostartPrompt"
+        parent: Overlay.overlay
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        width: Math.min(root.width - 32, 320)
+        padding: 16
+        focus: true
+        closePolicy: Popup.NoAutoClose
+        background: Rectangle {
+            radius: 12
+            color: root.dark ? "#30343d" : "#ffffff"
+            border.width: 1
+            border.color: root.dark ? "#55ffffff" : "#33000000"
+        }
+        contentItem: Column {
+            spacing: 10
+            Text {
+                text: "Start Focusboard at KDE login?"
+                color: root.ink
+                font.pixelSize: 15
+                font.bold: true
+                width: autostartPrompt.availableWidth
+                wrapMode: Text.Wrap
+            }
+            Text {
+                text: "This takes effect at your next login."
+                color: root.ink
+                opacity: 0.7
+                font.pixelSize: 12
+                width: autostartPrompt.availableWidth
+                wrapMode: Text.Wrap
+            }
+            Text {
+                visible: root.autostartPromptError.length > 0
+                text: root.autostartPromptError
+                color: root.dark ? "#ffb4a8" : "#992d21"
+                font.pixelSize: 12
+                width: autostartPrompt.availableWidth
+                wrapMode: Text.Wrap
+            }
+            Row {
+                spacing: 8
+                Button {
+                    objectName: "autostartNo"
+                    text: "No"
+                    onClicked: root.decideAutostart(false)
+                }
+                Button {
+                    objectName: "autostartYes"
+                    text: "Yes"
+                    highlighted: true
+                    onClicked: root.decideAutostart(true)
+                }
+            }
+        }
+    }
+    Shortcut {
+        sequence: "Escape"
+        enabled: autostartPrompt.visible
+        context: Qt.WindowShortcut
+        onActivated: root.decideAutostart(false)
     }
     Text {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom

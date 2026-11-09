@@ -8,6 +8,7 @@ Version numbers come from `project(Focusboard VERSION …)` in CMakeLists.txt. A
 - Retry recoverable save failures with bounded backoff and show unsaved status.
 - Clamp malformed saved settings and report normal-shutdown settings failures.
 - Add headless CI, draft release automation, and AUR packaging metadata.
+- Add user-controlled installer and first-launch autostart choices while preserving existing entries.
 
 ## 1.0.0
 

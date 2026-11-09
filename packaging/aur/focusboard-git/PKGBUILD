@@ -8,7 +8,7 @@ license=('MIT')
 depends=('glibc' 'libgcc' 'libstdc++' 'libglvnd' 'qt6-base>=6.8'
          'qt6-declarative>=6.8' 'qt6-wayland' 'qt6-svg' 'layer-shell-qt>=6.6' 'hicolor-icon-theme')
 makedepends=('cmake' 'ninja' 'git')
-checkdepends=('ttf-font')
+checkdepends=('ttf-font' 'util-linux')
 provides=('focusboard')
 conflicts=('focusboard')
 source=('focusboard::git+https://github.com/cristopherpp/focusboard.git')

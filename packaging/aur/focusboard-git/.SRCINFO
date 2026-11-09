@@ -6,6 +6,7 @@ pkgbase = focusboard-git
 	arch = x86_64
 	license = MIT
 	checkdepends = ttf-font
+	checkdepends = util-linux
 	makedepends = cmake
 	makedepends = ninja
 	makedepends = git

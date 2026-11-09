@@ -29,7 +29,7 @@ qt_add_qml_module(focusboard URI Focusboard VERSION 1.0 QML_FILES
     qml/components/ResizeHandle.qml
 )
 target_link_libraries(focusboard PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets LayerShellQt::Interface)
-target_include_directories(focusboard PRIVATE src/core)
+target_include_directories(focusboard PRIVATE src/core src/integration)
 target_compile_definitions(focusboard PRIVATE QT_NO_CAST_FROM_ASCII QT_NO_CAST_TO_ASCII
     FOCUSBOARD_VERSION="${PROJECT_VERSION}")
 
@@ -60,10 +60,14 @@ add_test(NAME focusboard-core COMMAND focusboard-tests)
 target_sources(focusboard-tests PRIVATE src/core/CommandController.cpp src/core/CommandController.hpp)
 qt_add_executable(focusboard-ui-tests tests/tst_presentation.cpp
     src/core/DocumentStore.cpp src/core/SettingsManager.cpp src/core/CommandController.cpp
-    src/core/LayerShellWindowController.cpp src/core/MarkdownPreview.cpp)
+    src/core/LayerShellWindowController.cpp src/core/MarkdownPreview.cpp
+    src/integration/AutostartManager.cpp)
 target_link_libraries(focusboard-ui-tests PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Test LayerShellQt::Interface)
 target_compile_definitions(focusboard-ui-tests PRIVATE FOCUSBOARD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(focusboard-ui-tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 add_test(NAME focusboard-presentation COMMAND focusboard-ui-tests)
+add_test(NAME focusboard-installer COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_autostart_installer.sh)
+add_test(NAME focusboard-autostart-cli COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_autostart_cli.sh $<TARGET_FILE:focusboard>)
 set_tests_properties(focusboard-presentation PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
 target_include_directories(focusboard-tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 endif()

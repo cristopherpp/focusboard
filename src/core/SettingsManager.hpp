@@ -41,7 +41,8 @@ class SettingsManager final : public QObject {
     void setRightMargin(int value);
     bool autostart() const;
     void setAutostart(bool value);
-    bool sync();
+    bool hasAutostartPreference() const;
+    Q_INVOKABLE bool sync();
     Q_INVOKABLE int clampX(int x, int screenWidth, int widgetWidth) const;
     Q_INVOKABLE int clampY(int y, int screenHeight, int widgetHeight) const;
   signals:

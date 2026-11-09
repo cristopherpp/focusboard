@@ -4,6 +4,7 @@
 #include "core/SettingsManager.hpp"
 #include "integration/AutostartManager.hpp"
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QLockFile>
@@ -15,8 +16,50 @@
 #include <QStandardPaths>
 #include <QStyle>
 #include <QSystemTrayIcon>
+#include <cstdio>
+
+namespace {
+int runAutostartCommand(int argc, char **argv) {
+    QCoreApplication app(argc, argv);
+    app.setApplicationName(QStringLiteral("Focusboard"));
+    app.setOrganizationName(QStringLiteral("Focusboard"));
+    SettingsManager settings;
+    AutostartManager autostart;
+    if (!autostart.migrateExistingEntry()) {
+        qCritical("%s", qPrintable(autostart.error()));
+        return 2;
+    }
+    const QString command = QString::fromLocal8Bit(argv[1]);
+    if (command == QStringLiteral("--autostart-state")) {
+        const char *state = autostart.hasConfiguration() || settings.hasAutostartPreference()
+                                ? (autostart.isEnabled() ? "enabled" : "disabled")
+                                : "unset";
+        std::puts(state);
+        return 0;
+    }
+    const bool enabled = command == QStringLiteral("--autostart-enable");
+    if (!autostart.setEnabled(enabled)) {
+        qCritical("%s", qPrintable(autostart.error()));
+        return 2;
+    }
+    settings.setAutostart(enabled);
+    if (!settings.sync()) {
+        qCritical("Cannot save autostart preference.");
+        return 2;
+    }
+    std::puts(enabled ? "enabled" : "disabled");
+    return 0;
+}
+} // namespace
 
 int main(int argc, char **argv) {
+    if (argc == 2) {
+        const QString command = QString::fromLocal8Bit(argv[1]);
+        if (command == QStringLiteral("--autostart-state") ||
+            command == QStringLiteral("--autostart-enable") ||
+            command == QStringLiteral("--autostart-disable"))
+            return runAutostartCommand(argc, argv);
+    }
     QElapsedTimer startup;
     startup.start();
     qputenv("QT_WAYLAND_SHELL_INTEGRATION", QByteArrayLiteral("layer-shell"));
@@ -41,6 +84,8 @@ int main(int argc, char **argv) {
     SettingsManager settings;
     AutostartManager autostart;
     const bool autostartReady = autostart.migrateExistingEntry();
+    const bool offerAutostart = autostartReady && autostart.isInstalled() && !autostart.hasConfiguration() &&
+                                !settings.hasAutostartPreference();
     LayerShellWindowController controller(&settings);
     CommandController commands(&documents, &settings);
     QQmlApplicationEngine engine;
@@ -50,7 +95,9 @@ int main(int argc, char **argv) {
     engine.setInitialProperties({{QStringLiteral("documents"), QVariant::fromValue(&documents)},
                                  {QStringLiteral("settings"), QVariant::fromValue(&settings)},
                                  {QStringLiteral("layerController"), QVariant::fromValue(&controller)},
-                                 {QStringLiteral("commands"), QVariant::fromValue(&commands)}});
+                                 {QStringLiteral("commands"), QVariant::fromValue(&commands)},
+                                 {QStringLiteral("autostartManager"), QVariant::fromValue(&autostart)},
+                                 {QStringLiteral("offerAutostart"), offerAutostart}});
     engine.loadFromModule(QStringLiteral("Focusboard"), QStringLiteral("Main"));
     if (engine.rootObjects().isEmpty())
         return 1;
@@ -99,6 +146,10 @@ int main(int argc, char **argv) {
     auto *login = menu.addAction(QStringLiteral("Launch at login"));
     login->setCheckable(true);
     login->setChecked(autostart.isEnabled());
+    QObject::connect(&autostart, &AutostartManager::stateChanged, login, [&] {
+        QSignalBlocker blocker(login);
+        login->setChecked(autostart.isEnabled());
+    });
     QObject::connect(login, &QAction::toggled, &autostart, [&](bool enabled) {
         if (autostart.setEnabled(enabled))
             settings.setAutostart(enabled);

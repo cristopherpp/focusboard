@@ -9,7 +9,7 @@ license=('MIT')
 depends=('glibc' 'libgcc' 'libstdc++' 'libglvnd' 'qt6-base>=6.8'
          'qt6-declarative>=6.8' 'qt6-wayland' 'qt6-svg' 'layer-shell-qt>=6.6' 'hicolor-icon-theme')
 makedepends=('cmake' 'ninja')
-checkdepends=('ttf-font')
+checkdepends=('ttf-font' 'util-linux')
 source=("focusboard-${pkgver}.tar.xz")
 sha256sums=('@SOURCE_SHA256@')
 options=('!debug')

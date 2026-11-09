@@ -3,8 +3,10 @@
 #include "../src/core/LayerShellWindowController.hpp"
 #include "../src/core/MarkdownPreview.hpp"
 #include "../src/core/SettingsManager.hpp"
+#include "../src/integration/AutostartManager.hpp"
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -23,6 +25,7 @@ class PresentationTests : public QObject {
         qmlRegisterUncreatableType<CommandController>("Focusboard", 1, 0, "CommandController", "app owned");
         qmlRegisterUncreatableType<LayerShellWindowController>("Focusboard", 1, 0,
                                                                "LayerShellWindowController", "app owned");
+        qmlRegisterUncreatableType<AutostartManager>("Focusboard", 1, 0, "AutostartManager", "app owned");
     }
     void resourcesAreBlocked() {
         QImage original(40, 40, QImage::Format_ARGB32);
@@ -44,6 +47,8 @@ class PresentationTests : public QObject {
         SettingsManager settings;
         CommandController commands(&documents, &settings);
         LayerShellWindowController controller(&settings);
+        AutostartManager autostart(QStringLiteral("/usr/bin/focusboard"),
+                                   QStringLiteral("/usr/bin/focusboard"));
         documents.setDocument("goals", "# Original\n- [ ] one\n");
         QQmlEngine engine;
         QSignalSpy warnings(&engine, &QQmlEngine::warnings);
@@ -54,7 +59,9 @@ class PresentationTests : public QObject {
             component.createWithInitialProperties({{"documents", QVariant::fromValue(&documents)},
                                                    {"settings", QVariant::fromValue(&settings)},
                                                    {"commands", QVariant::fromValue(&commands)},
-                                                   {"layerController", QVariant::fromValue(&controller)}}));
+                                                   {"layerController", QVariant::fromValue(&controller)},
+                                                   {"autostartManager", QVariant::fromValue(&autostart)},
+                                                   {"offerAutostart", false}}));
         QVERIFY2(object, qPrintable(component.errorString()));
         auto *window = qobject_cast<QQuickWindow *>(object.get());
         QVERIFY(window);
@@ -96,6 +103,51 @@ class PresentationTests : public QObject {
         QTest::keyClick(window, Qt::Key_Escape);
         QTRY_VERIFY(!palette->property("visible").toBool());
         QCOMPARE(warnings.count(), 0);
+    }
+    void firstLaunchChoices() {
+        for (const bool enable : {true, false}) {
+            QSettings raw(QStringLiteral("Focusboard"), QStringLiteral("Focusboard"));
+            raw.remove(QStringLiteral("autostart"));
+            raw.sync();
+            const QString entry = environment.path() + QStringLiteral("/autostart/focusboard.desktop");
+            QFile::remove(entry);
+            DocumentStore documents;
+            SettingsManager settings;
+            AutostartManager autostart(QStringLiteral("/usr/bin/focusboard"),
+                                       QStringLiteral("/usr/bin/focusboard"));
+            CommandController commands(&documents, &settings);
+            LayerShellWindowController controller(&settings);
+            QQmlEngine engine;
+            QQmlComponent component(
+                &engine, QUrl::fromLocalFile(QStringLiteral(FOCUSBOARD_SOURCE_DIR "/qml/Main.qml")));
+            QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+            std::unique_ptr<QObject> object(
+                component.createWithInitialProperties({{"documents", QVariant::fromValue(&documents)},
+                                                       {"settings", QVariant::fromValue(&settings)},
+                                                       {"commands", QVariant::fromValue(&commands)},
+                                                       {"layerController", QVariant::fromValue(&controller)},
+                                                       {"autostartManager", QVariant::fromValue(&autostart)},
+                                                       {"offerAutostart", true}}));
+            QVERIFY2(object, qPrintable(component.errorString()));
+            auto *window = qobject_cast<QQuickWindow *>(object.get());
+            QVERIFY(window);
+            window->resize(360, 440);
+            window->show();
+            QVERIFY(QTest::qWaitForWindowExposed(window));
+            auto *popup = object->findChild<QObject *>("autostartPrompt");
+            QVERIFY(popup);
+            QTRY_VERIFY(popup->property("visible").toBool());
+            auto *button = qobject_cast<QQuickItem *>(
+                object->findChild<QObject *>(enable ? "autostartYes" : "autostartNo"));
+            QVERIFY(button);
+            const QPointF center = button->mapToScene(QPointF(button->width() / 2, button->height() / 2));
+            QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, center.toPoint());
+            QTRY_VERIFY(!popup->property("visible").toBool());
+            QVERIFY(settings.hasAutostartPreference());
+            QCOMPARE(settings.autostart(), enable);
+            QCOMPARE(autostart.isEnabled(), enable);
+            QCOMPARE(QFile::exists(entry), enable);
+        }
     }
 };
 QTEST_MAIN(PresentationTests)

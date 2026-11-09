@@ -24,7 +24,7 @@ jobs:
         run: |
           pacman -Syu --noconfirm --needed base-devel cmake ninja git \
             qt6-base qt6-declarative qt6-wayland qt6-svg layer-shell-qt \
-            ttf-dejavu desktop-file-utils namcap
+            ttf-dejavu desktop-file-utils namcap util-linux
       - name: Build, test, and lint
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr

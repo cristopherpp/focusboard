@@ -21,7 +21,13 @@ To update, pull or copy the new source and rerun `./scripts/install-arch.sh`. To
 sudo pacman -Rns focusboard
 ```
 
-Uninstalling leaves your documents and settings untouched. Enable or disable **Launch at login** in the tray menu or KDE System Settings → Autostart. The tray also provides Show, Hide, and Quit; Hide keeps Focusboard running.
+Uninstalling leaves your documents and settings untouched. The tray also provides Show, Hide, and Quit; Hide keeps Focusboard running.
+
+After a successful interactive local installation, the installer asks **“Start Focusboard automatically at KDE login? [Y/n]:”**. Enter or **Y** enables it; **N** records a disabled preference. Noninteractive installs skip the question. An existing enabled or disabled preference is kept without prompting. The installer never starts Focusboard immediately.
+
+An AUR installation does not edit your home directory. On the first launch of an installed copy with no existing preference, a small in-gadget prompt offers **Yes** or **No**; neither is chosen automatically. Change your choice later with **Launch at login** in the tray menu or **KDE System Settings → Autostart**. Disabling it leaves a `Hidden=true` entry so the choice is remembered. Starting Focusboard now is separate from autostart, which launches it at the **next KDE login**.
+
+The entry is `${XDG_CONFIG_HOME:-$HOME/.config}/autostart/focusboard.desktop`. Check the effective choice with `/usr/bin/focusboard --autostart-state` (`enabled`, `disabled`, or `unset`). Legacy Focusboard entries are migrated to this name without enabling a second copy.
 
 ## Use
 

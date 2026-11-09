@@ -114,12 +114,15 @@ void SettingsManager::setRightMargin(int v) {
 bool SettingsManager::autostart() const {
     return m_settings.value(QStringLiteral("autostart"), false).toBool();
 }
+bool SettingsManager::hasAutostartPreference() const {
+    return m_settings.contains(QStringLiteral("autostart"));
+}
 bool SettingsManager::sync() {
     m_settings.sync();
     return m_settings.status() == QSettings::NoError;
 }
 void SettingsManager::setAutostart(bool v) {
-    if (v == autostart())
+    if (v == autostart() && hasAutostartPreference())
         return;
     m_settings.setValue(QStringLiteral("autostart"), v);
     emit autostartChanged();

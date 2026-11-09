@@ -44,5 +44,9 @@ if [[ $mode == --prepare-only ]]; then
 fi
 export CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL:-2}
 makepkg -si
+if ! "$root/scripts/autostart-after-install.sh"; then
+    printf 'Autostart setup failed after installation. Use the tray menu to choose later.\n' >&2
+    exit 1
+fi
 printf '\nInstalled through pacman. Quit any running development copy, then launch Focusboard from KDE or run: /usr/bin/focusboard\n'
-printf 'Enable Launch at login from the tray menu. Package files remain in: %s\n' "$stage"
+printf 'Package files remain in: %s\n' "$stage"
