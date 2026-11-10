@@ -17,6 +17,7 @@ class DocumentStore final : public QObject {
     Q_PROPERTY(bool conflicted READ conflicted NOTIFY statusChanged)
   public:
     explicit DocumentStore(QObject *parent = nullptr);
+    DocumentStore(const QString &directory, QObject *parent = nullptr);
     QString goals() const { return m_goals.text; }
     QString notes() const { return m_notes.text; }
     QString error() const { return m_error; }

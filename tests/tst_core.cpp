@@ -1,6 +1,6 @@
 #include "../src/core/CommandController.hpp"
+#include "../src/core/DesktopWindowController.hpp"
 #include "../src/core/DocumentStore.hpp"
-#include "../src/core/LayerShellWindowController.hpp"
 #include "../src/core/MultiMonitorController.hpp"
 #include "../src/core/SettingsManager.hpp"
 #include "../src/integration/AutostartManager.hpp"
@@ -11,19 +11,100 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
+#ifdef Q_OS_UNIX
 #include <unistd.h>
+#endif
+#include "../src/platform/windows/WindowGeometry.hpp"
+#include <QLockFile>
+#include <QProcess>
 class CoreTests : public QObject {
     Q_OBJECT
     QTemporaryDir environment;
     int testNumber = 0;
+    QString dataPath;
   private slots:
     void init() {
         const QString path = environment.path() + QStringLiteral("/%1").arg(++testNumber);
         QVERIFY(QDir().mkpath(path));
+        dataPath = path + QStringLiteral("/documents");
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, path);
         qputenv("XDG_DATA_HOME", path.toUtf8());
         qputenv("XDG_CONFIG_HOME", path.toUtf8());
         QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, path);
     }
+    void autostartPreferencePersists() {
+        SettingsManager settings;
+        QVERIFY(!settings.hasAutostartPreference());
+        settings.setAutostart(false);
+        QVERIFY(settings.sync());
+        SettingsManager restored;
+        QVERIFY(restored.hasAutostartPreference());
+        QVERIFY(!restored.autostart());
+        restored.setAutostart(true);
+        QVERIFY(restored.sync());
+        SettingsManager enabled;
+        QVERIFY(enabled.autostart());
+    }
+    void windowsLogicalGeometry() {
+        using namespace WindowsGeometry;
+        const QRect left(-1920, -200, 1920, 1040);
+        QCOMPARE(constrain(QRect(-1900, -180, 360, 440), left), QRect(-1900, -180, 360, 440));
+        QCOMPARE(constrain(QRect(30, 20, 360, 440), left), QRect(-360, 20, 360, 440));
+        QCOMPARE(constrain(QRect(-3000, -400, 3000, 2000), left), left);
+        const QRect scaled(1920, 0, 1280, 680); // 1920x1080 at 150%, minus taskbar.
+        const QRect fitted = constrain(QRect(3000, 600, 360, 440), scaled);
+        QCOMPARE(fitted, QRect(2840, 240, 360, 440));
+        QVERIFY(scaled.contains(fitted));
+        QCOMPARE(constrain(QRect(0, 0, 720, 900), QRect(0, 0, 200, 100)), QRect(0, 0, 200, 100));
+        QVERIFY(constrain(QRect(1, 1, 300, 300), QRect()).isEmpty());
+        QCOMPARE(anchoredPosition(left, QSize(360, 440), QStringLiteral("bottom-right"), 24, 24),
+                 QPoint(-384, 376));
+    }
+    void singleInstanceLock() {
+        const QString path = environment.filePath(QStringLiteral("instance.lock"));
+        QLockFile first(path), second(path);
+        QVERIFY(first.tryLock(0));
+        QVERIFY(!second.tryLock(0));
+        QProcess probe;
+        const QStringList arguments{QStringLiteral("--probe-lock"), path};
+        probe.start(QCoreApplication::applicationFilePath(), arguments);
+        QVERIFY(probe.waitForFinished(10000));
+        QCOMPARE(probe.exitStatus(), QProcess::NormalExit);
+        QCOMPARE(probe.exitCode(), 23);
+        first.unlock();
+        probe.start(QCoreApplication::applicationFilePath(), arguments);
+        QVERIFY(probe.waitForFinished(10000));
+        QCOMPARE(probe.exitCode(), 0);
+        QVERIFY(second.tryLock(0));
+    }
+#ifdef Q_OS_WIN
+    void windowsAutostart() {
+        const QString path = environment.filePath(QStringLiteral("run.ini"));
+        const QString executable = QStringLiteral("C:/Users/Test User/日本/Focusboard.exe");
+        AutostartManager manager(executable, path, QSettings::IniFormat);
+        QVERIFY(manager.migrateExistingEntry());
+        QVERIFY(!manager.hasConfiguration());
+        QVERIFY(manager.setEnabled(false));
+        QVERIFY(!manager.isEnabled());
+        QVERIFY(manager.setEnabled(true));
+        QVERIFY(manager.setEnabled(true));
+        QSettings registration(path, QSettings::IniFormat);
+        QCOMPARE(registration.allKeys(), QStringList{QStringLiteral("Focusboard")});
+        QCOMPARE(registration.value(QStringLiteral("Focusboard")).toString(),
+                 QLatin1Char('"') + QDir::toNativeSeparators(executable) + QLatin1Char('"'));
+        AutostartManager restored(executable, path, QSettings::IniFormat);
+        QVERIFY(restored.isEnabled());
+        QVERIFY(restored.setEnabled(false));
+        QVERIFY(!restored.hasConfiguration());
+        AutostartManager invalid(QStringLiteral("C:/bad\"path.exe"), path, QSettings::IniFormat);
+        QVERIFY(!invalid.setEnabled(true));
+        QVERIFY(!invalid.error().isEmpty());
+        // A directory cannot be used as an INI registration file.
+        AutostartManager unwritable(executable, environment.path(), QSettings::IniFormat);
+        QVERIFY(!unwritable.setEnabled(true));
+    }
+#endif
     void zoomBounds() {
         SettingsManager s;
         s.setZoom(200);
@@ -67,14 +148,14 @@ class CoreTests : public QObject {
                                                 QStringLiteral("HDMI-A-1"), QString()}),
                  (QStringList{QStringLiteral("HDMI-A-1"), QStringLiteral("eDP-1")}));
 
-        QCOMPARE(LayerShellWindowController::clampSurfaceSize(QSize(720, 900), QSize(1920, 1080)),
+        QCOMPARE(DesktopWindowController::clampSurfaceSize(QSize(720, 900), QSize(1920, 1080)),
                  QSize(720, 900));
-        QCOMPARE(LayerShellWindowController::clampSurfaceSize(QSize(720, 900), QSize(320, 240)),
+        QCOMPARE(DesktopWindowController::clampSurfaceSize(QSize(720, 900), QSize(320, 240)),
                  QSize(320, 240));
-        QCOMPARE(LayerShellWindowController::clampSurfaceSize(QSize(720, 900), QSize(0, 0)), QSize(0, 0));
+        QCOMPARE(DesktopWindowController::clampSurfaceSize(QSize(720, 900), QSize(0, 0)), QSize(0, 0));
     }
     void sharedDocumentObservers() {
-        DocumentStore documents;
+        DocumentStore documents(dataPath);
         QSignalSpy firstSurface(&documents, &DocumentStore::goalsChanged);
         QSignalSpy secondSurface(&documents, &DocumentStore::goalsChanged);
         documents.setDocument(QStringLiteral("goals"), QStringLiteral("- [ ] Shared\n"));
@@ -86,13 +167,13 @@ class CoreTests : public QObject {
         const QString text =
             QStringLiteral("# Goals\r\n- [ ] Study C++  \r\n- [x] Complete project\r\nπ 🦊\n\t`code`\n");
         {
-            DocumentStore store;
+            DocumentStore store(dataPath);
             store.setDocument(QStringLiteral("goals"), text);
             store.setDocument(QStringLiteral("notes"), QStringLiteral("**Keep**\n"));
             store.flush();
             QVERIFY(store.error().isEmpty());
         }
-        DocumentStore restored;
+        DocumentStore restored(dataPath);
         QCOMPARE(restored.goals(), text);
         QCOMPARE(restored.notes(), QStringLiteral("**Keep**\n"));
         QFile f(restored.dataDirectory() + QStringLiteral("/goals.md"));
@@ -100,9 +181,9 @@ class CoreTests : public QObject {
         QCOMPARE(f.readAll(), text.toUtf8());
     }
     void failedLoadIsNotOverwritten() {
-        const QString folder = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        const QString folder = dataPath;
         QVERIFY(QDir().mkpath(folder + QStringLiteral("/goals.md")));
-        DocumentStore store;
+        DocumentStore store(dataPath);
         QVERIFY(!store.error().isEmpty());
         store.setDocument(QStringLiteral("goals"), QStringLiteral("replacement"));
         store.flush();
@@ -111,7 +192,7 @@ class CoreTests : public QObject {
         QCOMPARE(store.goals(), QStringLiteral("replacement"));
     }
     void failedWritePreservesMemoryAndRetries() {
-        DocumentStore store;
+        DocumentStore store(dataPath);
         const QString path = store.dataDirectory();
         QVERIFY(QDir().mkpath(QFileInfo(path).absolutePath()));
         QFile obstacle(path);
@@ -125,11 +206,11 @@ class CoreTests : public QObject {
         QVERIFY(obstacle.remove());
         QTRY_VERIFY_WITH_TIMEOUT(!store.unsaved(), 2500); // Retry needs no second edit.
         QVERIFY(store.error().isEmpty());
-        DocumentStore restored;
+        DocumentStore restored(dataPath);
         QCOMPARE(restored.goals(), QStringLiteral("pending"));
     }
     void externalReplacementReloadsCleanDocument() {
-        DocumentStore store;
+        DocumentStore store(dataPath);
         store.setDocument(QStringLiteral("goals"), QStringLiteral("old\n"));
         QVERIFY(store.flush());
         QSaveFile external(store.dataDirectory() + QStringLiteral("/goals.md"));
@@ -141,7 +222,7 @@ class CoreTests : public QObject {
         QVERIFY(!store.conflicted());
     }
     void externalReplacementKeepsBothVersions() {
-        DocumentStore store;
+        DocumentStore store(dataPath);
         store.setDocument(QStringLiteral("goals"), QStringLiteral("base\n"));
         QVERIFY(store.flush());
         store.setDocument(QStringLiteral("goals"), QStringLiteral("local π\n"));
@@ -169,7 +250,7 @@ class CoreTests : public QObject {
         QCOMPARE(copy.readAll(), QStringLiteral("local π plus\n").toUtf8());
     }
     void invalidExternalFileIsPreserved() {
-        DocumentStore store;
+        DocumentStore store(dataPath);
         store.setDocument(QStringLiteral("notes"), QStringLiteral("valid\n"));
         QVERIFY(store.flush());
         QFile external(store.dataDirectory() + QStringLiteral("/notes.md"));
@@ -186,7 +267,7 @@ class CoreTests : public QObject {
         QCOMPARE(external.readAll(), QByteArray::fromHex("fffe"));
     }
     void invalidExternalFileCanRecoverWithoutRestart() {
-        DocumentStore store;
+        DocumentStore store(dataPath);
         store.setDocument(QStringLiteral("notes"), QStringLiteral("before\n"));
         QVERIFY(store.flush());
         QFile file(store.dataDirectory() + QStringLiteral("/notes.md"));
@@ -204,7 +285,7 @@ class CoreTests : public QObject {
         QVERIFY(store.flush());
     }
     void externalDeletionReloadsCleanDocument() {
-        DocumentStore store;
+        DocumentStore store(dataPath);
         store.setDocument(QStringLiteral("goals"), QStringLiteral("hello\n"));
         QVERIFY(store.flush());
         QVERIFY(QFile::remove(store.dataDirectory() + QStringLiteral("/goals.md")));
@@ -213,7 +294,7 @@ class CoreTests : public QObject {
         QVERIFY(!store.unsaved());
     }
     void externalCreationAfterEmptyStartup() {
-        DocumentStore store;
+        DocumentStore store(dataPath);
         QVERIFY(QDir().mkpath(store.dataDirectory()));
         QFile file(store.dataDirectory() + QStringLiteral("/goals.md"));
         QVERIFY(file.open(QIODevice::WriteOnly));
@@ -221,10 +302,11 @@ class CoreTests : public QObject {
         file.close();
         QTRY_COMPARE_WITH_TIMEOUT(store.goals(), QStringLiteral("new\n"), 2000);
     }
+#ifdef Q_OS_UNIX
     void permissionFailureRetainsDirtyText() {
         if (geteuid() == 0)
             QSKIP("Root bypasses directory write permissions");
-        DocumentStore store;
+        DocumentStore store(dataPath);
         QVERIFY(QDir().mkpath(store.dataDirectory()));
         QFile directory(store.dataDirectory());
         QVERIFY(directory.setPermissions(QFileDevice::ReadOwner | QFileDevice::ExeOwner));
@@ -237,6 +319,7 @@ class CoreTests : public QObject {
         QVERIFY(store.flush());
         QCOMPARE(store.notes(), QStringLiteral("protected"));
     }
+#endif
     void settingsPersist() {
         {
             SettingsManager a;
@@ -263,7 +346,8 @@ class CoreTests : public QObject {
         QCOMPARE(b.height(), 700);
     }
     void invalidSettingsStayWithinBounds() {
-        QSettings raw(QStringLiteral("Focusboard"), QStringLiteral("Focusboard"));
+        QSettings raw(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("Focusboard"),
+                      QStringLiteral("Focusboard"));
         raw.setValue(QStringLiteral("zoom"), 999);
         raw.setValue(QStringLiteral("width"), -50);
         raw.setValue(QStringLiteral("height"), 9999);
@@ -277,6 +361,7 @@ class CoreTests : public QObject {
         QCOMPARE(settings.theme(), QStringLiteral("system"));
         QCOMPARE(settings.corner(), QStringLiteral("top-right"));
     }
+#ifndef Q_OS_WIN
     void autostartFile() {
         AutostartManager a;
         QVERIFY(!a.hasConfiguration());
@@ -444,6 +529,7 @@ class CoreTests : public QObject {
         QVERIFY(entry.contains(QStringLiteral("Exec=\"/tmp/a b/100%%/focusboard\"\n")));
         QVERIFY(entry.contains(QStringLiteral("TryExec=/tmp/a b/100%/focusboard\n")));
     }
+#endif
     void parsing_data() {
         QTest::addColumn<QString>("input");
         QTest::addColumn<bool>("valid");
@@ -516,7 +602,7 @@ class CoreTests : public QObject {
                  QStringLiteral("text\r\n- [ ]   spaces\r\n"));
     }
     void dispatch() {
-        DocumentStore d;
+        DocumentStore d(dataPath);
         SettingsManager s;
         CommandController c(&d, &s);
         QSignalSpy edit(&c, &CommandController::editRequested);
@@ -552,5 +638,13 @@ class CoreTests : public QObject {
         QVERIFY(!c.execute(QStringLiteral(":help")).isEmpty());
     }
 };
-QTEST_GUILESS_MAIN(CoreTests)
+int main(int argc, char **argv) {
+    QCoreApplication app(argc, argv);
+    if (app.arguments().size() == 3 && app.arguments().at(1) == QStringLiteral("--probe-lock")) {
+        QLockFile lock(app.arguments().at(2));
+        return lock.tryLock(0) ? 0 : 23;
+    }
+    CoreTests tests;
+    return QTest::qExec(&tests, argc, argv);
+}
 #include "tst_core.moc"

@@ -4,6 +4,13 @@ Version numbers come from `project(Focusboard VERSION …)` in CMakeLists.txt. A
 
 ## 1.0.1 (unreleased)
 
+- Add a shared desktop-window interface with the existing Linux LayerBottom implementation and a Windows Qt/Win32 bottom-stacked tool-window backend.
+- Add independent Windows monitor geometry, native per-user autostart, embedded icon/version resources, and common AppData storage for installed and portable copies.
+- Add per-user Inno Setup and self-contained ZIP packaging through Qt deployment and app-local MSVC runtimes.
+- Extend CI with Windows tests, staged/extracted runtime checks, installer smoke tests, measurements, and idempotent draft-release attachments.
+- Isolate cross-platform test storage and cover logical monitor geometry and cross-process single-instance locks.
+- Windows build, package execution, and desktop integration remain pending Windows validation; no package sizes or Windows performance results are claimed.
+
 - Protect local edits from external Markdown changes and save a recovery copy on conflicts.
 - Retry recoverable save failures with bounded backoff and show unsaved status.
 - Clamp malformed saved settings and report normal-shutdown settings failures.

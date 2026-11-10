@@ -15,6 +15,10 @@
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QStandardPaths>
+#ifdef Q_OS_WIN
+#include <QQuickStyle>
+#include <QSessionManager>
+#endif
 #include <QStyle>
 #include <QSystemTrayIcon>
 #include <cstdio>
@@ -71,6 +75,11 @@ int runAutostartCommand(int argc, char **argv) {
 } // namespace
 
 int main(int argc, char **argv) {
+#ifdef Q_OS_WIN
+    // The existing custom control backgrounds require a customizable Qt style.
+    // Fusion matches Qt's Linux default without changing Linux style selection.
+    QQuickStyle::setStyle(QStringLiteral("Fusion"));
+#endif
     if (argc == 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--verify-qml-resource"))
         return verifyQmlResource(argc, argv);
     if (argc == 2) {
@@ -82,21 +91,36 @@ int main(int argc, char **argv) {
     }
     QElapsedTimer startup;
     startup.start();
+#ifdef Q_OS_LINUX
     qputenv("QT_WAYLAND_SHELL_INTEGRATION", QByteArrayLiteral("layer-shell"));
+#endif
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("Focusboard"));
     app.setOrganizationName(QStringLiteral("Focusboard"));
     app.setApplicationVersion(QStringLiteral(FOCUSBOARD_VERSION));
     app.setDesktopFileName(QStringLiteral("focusboard"));
     app.setQuitOnLastWindowClosed(false);
+#ifdef Q_OS_LINUX
     if (!app.platformName().startsWith(QStringLiteral("wayland"))) {
         qCritical("Focusboard requires a Wayland session.");
         return 1;
     }
-    const QString lockPath = QDir(QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation))
-                                 .filePath(QStringLiteral("focusboard.lock"));
+#endif
+#ifdef Q_OS_WIN
+    app.setWindowIcon(QIcon(QStringLiteral(":/icons/256x256.png")));
+    const QString lockDirectory = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+#else
+    const QString lockDirectory = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+#endif
+    if (!QDir().mkpath(lockDirectory))
+        return 1;
+    const QString lockPath = QDir(lockDirectory).filePath(QStringLiteral("focusboard.lock"));
     QLockFile lock(lockPath);
     if (!lock.tryLock(0)) {
+        if (lock.error() != QLockFile::LockFailedError) {
+            qCritical("Cannot create the per-user Focusboard lock file.");
+            return 1;
+        }
         qWarning("Focusboard is already running; use its tray icon to restore it.");
         return 0;
     }
@@ -110,7 +134,7 @@ int main(int argc, char **argv) {
     QQmlApplicationEngine engine;
     MultiMonitorController monitors(&engine, &documents, &settings, &commands, &autostart, offerAutostart);
     if (!monitors.start()) {
-        qCritical("Focusboard could not create a layer-shell surface for any connected monitor.");
+        qCritical("Focusboard could not create a desktop window for any connected monitor.");
         return 1;
     }
     const bool profileStartup = qEnvironmentVariableIsSet("FOCUSBOARD_PROFILE_STARTUP");
@@ -118,8 +142,9 @@ int main(int argc, char **argv) {
         qInfo("Focusboard bootstrap: %lld ms", startup.elapsed());
     if (profileStartup)
         qInfo("Focusboard window initialized: %lld ms", startup.elapsed());
-    QSystemTrayIcon tray(
-        QIcon::fromTheme(QStringLiteral("focusboard"), app.style()->standardIcon(QStyle::SP_DesktopIcon)));
+    QSystemTrayIcon tray(QIcon::fromTheme(
+        QStringLiteral("focusboard"),
+        app.windowIcon().isNull() ? app.style()->standardIcon(QStyle::SP_DesktopIcon) : app.windowIcon()));
     tray.setToolTip(QStringLiteral("Focusboard — Ctrl+K for commands"));
     auto showWindow = [&monitors] { monitors.showAll(true); };
     auto hideWindow = [&] {
@@ -185,6 +210,18 @@ int main(int argc, char **argv) {
         if (!settings.sync())
             qCritical("Focusboard could not save settings during shutdown.");
     });
+#ifdef Q_OS_WIN
+    // Windows logout/restart (including Restart Manager) may not run aboutToQuit.
+    QObject::connect(
+        &app, &QGuiApplication::commitDataRequest, &documents,
+        [&](QSessionManager &session) {
+            const bool saved = documents.flush();
+            const bool preferencesSaved = settings.sync();
+            if (!saved || !preferencesSaved)
+                session.cancel();
+        },
+        Qt::DirectConnection);
+#endif
     tray.show();
     if (!autostartReady)
         tray.showMessage(QStringLiteral("Autostart"), autostart.error(), QSystemTrayIcon::Warning);

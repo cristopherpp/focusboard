@@ -74,3 +74,46 @@ jobs:
           name: focusboard-arch-package
           path: release-artifacts/*.pkg.tar.zst
           if-no-files-found: error
+
+  windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Configure Release
+        run: cmake -S . -B build-windows -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Compile
+        run: cmake --build build-windows --parallel 2
+      - name: Run shared and Windows tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: ctest --test-dir build-windows --output-on-failure
+      - name: Ensure Inno Setup is available
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            choco install innosetup --version=6.4.3 --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          }
+      - name: Deploy, verify, package, and measure
+        run: ./scripts/package-windows.ps1
+      - name: Test installer and uninstaller on the disposable runner
+        run: |
+          $version = (Get-Content build-windows/version.txt -Raw).Trim()
+          ./scripts/test-windows-installer.ps1 -SetupExe release-artifacts/Focusboard-Setup-x64.exe -Version $version -MeasurementsFile "release-artifacts/Focusboard-$version-measurements.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: focusboard-windows-packages
+          path: release-artifacts/*
+          if-no-files-found: error
