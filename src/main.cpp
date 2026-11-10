@@ -1,24 +1,42 @@
 #include "core/CommandController.hpp"
 #include "core/DocumentStore.hpp"
-#include "core/LayerShellWindowController.hpp"
+#include "core/MultiMonitorController.hpp"
 #include "core/SettingsManager.hpp"
 #include "integration/AutostartManager.hpp"
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QLockFile>
 #include <QMenu>
 #include <QMessageBox>
 #include <QQmlApplicationEngine>
-#include <QQmlContext>
-#include <QQuickWindow>
+#include <QQmlComponent>
+#include <QQmlEngine>
 #include <QStandardPaths>
 #include <QStyle>
 #include <QSystemTrayIcon>
 #include <cstdio>
 
 namespace {
+int verifyQmlResource(int argc, char **argv) {
+    QApplication app(argc, argv);
+    QQmlEngine engine;
+    const QUrl url = MultiMonitorController::mainQmlUrl();
+    QFile resource(QStringLiteral(":/qt/qml/Focusboard/qml/Main.qml"));
+    if (!resource.open(QIODevice::ReadOnly)) {
+        qCritical().noquote() << "Embedded QML resource is missing at" << url;
+        return 2;
+    }
+    QQmlComponent component(&engine, url);
+    if (component.status() != QQmlComponent::Ready) {
+        qCritical().noquote() << "Embedded Main.qml was found but failed to compile:" << component.errors();
+        return 3;
+    }
+    return 0;
+}
+
 int runAutostartCommand(int argc, char **argv) {
     QCoreApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("Focusboard"));
@@ -53,6 +71,8 @@ int runAutostartCommand(int argc, char **argv) {
 } // namespace
 
 int main(int argc, char **argv) {
+    if (argc == 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--verify-qml-resource"))
+        return verifyQmlResource(argc, argv);
     if (argc == 2) {
         const QString command = QString::fromLocal8Bit(argv[1]);
         if (command == QStringLiteral("--autostart-state") ||
@@ -86,37 +106,26 @@ int main(int argc, char **argv) {
     const bool autostartReady = autostart.migrateExistingEntry();
     const bool offerAutostart = autostartReady && autostart.isInstalled() && !autostart.hasConfiguration() &&
                                 !settings.hasAutostartPreference();
-    LayerShellWindowController controller(&settings);
     CommandController commands(&documents, &settings);
     QQmlApplicationEngine engine;
+    MultiMonitorController monitors(&engine, &documents, &settings, &commands, &autostart, offerAutostart);
+    if (!monitors.start()) {
+        qCritical("Focusboard could not create a layer-shell surface for any connected monitor.");
+        return 1;
+    }
     const bool profileStartup = qEnvironmentVariableIsSet("FOCUSBOARD_PROFILE_STARTUP");
     if (profileStartup)
         qInfo("Focusboard bootstrap: %lld ms", startup.elapsed());
-    engine.setInitialProperties({{QStringLiteral("documents"), QVariant::fromValue(&documents)},
-                                 {QStringLiteral("settings"), QVariant::fromValue(&settings)},
-                                 {QStringLiteral("layerController"), QVariant::fromValue(&controller)},
-                                 {QStringLiteral("commands"), QVariant::fromValue(&commands)},
-                                 {QStringLiteral("autostartManager"), QVariant::fromValue(&autostart)},
-                                 {QStringLiteral("offerAutostart"), offerAutostart}});
-    engine.loadFromModule(QStringLiteral("Focusboard"), QStringLiteral("Main"));
-    if (engine.rootObjects().isEmpty())
-        return 1;
-    auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
-    if (!window || !controller.initialize(window))
-        return 1;
     if (profileStartup)
         qInfo("Focusboard window initialized: %lld ms", startup.elapsed());
     QSystemTrayIcon tray(
         QIcon::fromTheme(QStringLiteral("focusboard"), app.style()->standardIcon(QStyle::SP_DesktopIcon)));
     tray.setToolTip(QStringLiteral("Focusboard — Ctrl+K for commands"));
-    auto showWindow = [window] {
-        window->show();
-        window->requestActivate();
-    };
+    auto showWindow = [&monitors] { monitors.showAll(true); };
     auto hideWindow = [&] {
         const bool saved = documents.flush();
         if (QSystemTrayIcon::isSystemTrayAvailable()) {
-            window->hide();
+            monitors.hideAll();
             if (!saved)
                 tray.showMessage(QStringLiteral("Focusboard: unsaved changes"), documents.error(),
                                  QSystemTrayIcon::Warning);
@@ -139,9 +148,9 @@ int main(int argc, char **argv) {
         app.quit();
     };
     QMenu menu;
-    QObject::connect(menu.addAction(QStringLiteral("Show Focusboard")), &QAction::triggered, window,
+    QObject::connect(menu.addAction(QStringLiteral("Show Focusboard")), &QAction::triggered, &app,
                      showWindow);
-    QObject::connect(menu.addAction(QStringLiteral("Hide Focusboard")), &QAction::triggered, window,
+    QObject::connect(menu.addAction(QStringLiteral("Hide Focusboard")), &QAction::triggered, &app,
                      hideWindow);
     auto *login = menu.addAction(QStringLiteral("Launch at login"));
     login->setCheckable(true);
@@ -162,12 +171,12 @@ int main(int argc, char **argv) {
     menu.addSeparator();
     QObject::connect(menu.addAction(QStringLiteral("Quit")), &QAction::triggered, &app, requestQuit);
     tray.setContextMenu(&menu);
-    QObject::connect(&tray, &QSystemTrayIcon::activated, window,
+    QObject::connect(&tray, &QSystemTrayIcon::activated, &app,
                      [showWindow](QSystemTrayIcon::ActivationReason reason) {
                          if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick)
                              showWindow();
                      });
-    QObject::connect(&commands, &CommandController::hideRequested, window, hideWindow);
+    QObject::connect(&commands, &CommandController::hideRequested, &app, hideWindow);
     QObject::connect(&commands, &CommandController::quitRequested, &app, requestQuit);
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &documents, [&] {
         if (!documents.flush())
@@ -179,7 +188,6 @@ int main(int argc, char **argv) {
     tray.show();
     if (!autostartReady)
         tray.showMessage(QStringLiteral("Autostart"), autostart.error(), QSystemTrayIcon::Warning);
-    window->show();
     if (profileStartup)
         qInfo("Focusboard startup to first window show: %lld ms", startup.elapsed());
     return app.exec();

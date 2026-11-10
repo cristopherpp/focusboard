@@ -21,6 +21,7 @@ qt_add_executable(focusboard
     src/core/CommandController.cpp src/core/CommandController.hpp
     src/core/MarkdownPreview.cpp src/core/MarkdownPreview.hpp
     src/core/LayerShellWindowController.cpp src/core/LayerShellWindowController.hpp
+    src/core/MultiMonitorController.cpp src/core/MultiMonitorController.hpp
     src/integration/AutostartManager.cpp src/integration/AutostartManager.hpp
 )
 qt_add_qml_module(focusboard URI Focusboard VERSION 1.0 QML_FILES
@@ -54,8 +55,9 @@ target_include_directories(focusboard PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/genera
 
 if(BUILD_TESTING)
 find_package(Qt6 REQUIRED COMPONENTS Test)
-add_executable(focusboard-tests tests/tst_core.cpp src/core/DocumentStore.cpp src/core/DocumentStore.hpp src/core/SettingsManager.cpp src/core/SettingsManager.hpp src/core/LayerShellWindowController.cpp src/core/LayerShellWindowController.hpp src/integration/AutostartManager.cpp src/integration/AutostartManager.hpp)
-target_link_libraries(focusboard-tests PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Test LayerShellQt::Interface)
+add_executable(focusboard-tests tests/tst_core.cpp src/core/DocumentStore.cpp src/core/DocumentStore.hpp src/core/SettingsManager.cpp src/core/SettingsManager.hpp src/core/LayerShellWindowController.cpp src/core/LayerShellWindowController.hpp src/core/MultiMonitorController.cpp src/core/MultiMonitorController.hpp src/integration/AutostartManager.cpp src/integration/AutostartManager.hpp)
+target_link_libraries(focusboard-tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test LayerShellQt::Interface)
+target_include_directories(focusboard-tests PRIVATE src/core src/integration ${CMAKE_CURRENT_BINARY_DIR}/generated)
 add_test(NAME focusboard-core COMMAND focusboard-tests)
 target_sources(focusboard-tests PRIVATE src/core/CommandController.cpp src/core/CommandController.hpp)
 qt_add_executable(focusboard-ui-tests tests/tst_presentation.cpp
@@ -68,6 +70,7 @@ target_include_directories(focusboard-ui-tests PRIVATE ${CMAKE_CURRENT_BINARY_DI
 add_test(NAME focusboard-presentation COMMAND focusboard-ui-tests)
 add_test(NAME focusboard-installer COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_autostart_installer.sh)
 add_test(NAME focusboard-autostart-cli COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_autostart_cli.sh $<TARGET_FILE:focusboard>)
-set_tests_properties(focusboard-presentation PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
+add_test(NAME focusboard-qml-resource COMMAND focusboard --verify-qml-resource)
+set_tests_properties(focusboard-presentation focusboard-qml-resource PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
 target_include_directories(focusboard-tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 endif()

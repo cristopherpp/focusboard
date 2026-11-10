@@ -9,6 +9,8 @@ Version numbers come from `project(Focusboard VERSION …)` in CMakeLists.txt. A
 - Clamp malformed saved settings and report normal-shutdown settings failures.
 - Add headless CI, draft release automation, and AUR packaging metadata.
 - Add user-controlled installer and first-launch autostart choices while preserving existing entries.
+- Create one bottom-layer gadget surface per connected monitor, sharing Markdown, commands, settings, and the single tray icon.
+- Fix CI whitespace validation for root commits and shallow checkouts.
 
 ## 1.0.0
 

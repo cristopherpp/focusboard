@@ -1,5 +1,7 @@
 #include "../src/core/CommandController.hpp"
 #include "../src/core/DocumentStore.hpp"
+#include "../src/core/LayerShellWindowController.hpp"
+#include "../src/core/MultiMonitorController.hpp"
 #include "../src/core/SettingsManager.hpp"
 #include "../src/integration/AutostartManager.hpp"
 #include <QDir>
@@ -39,6 +41,46 @@ class CoreTests : public QObject {
         QCOMPARE(s.clampX(900, 1000, 300), 700);
         QCOMPARE(s.clampY(800, 600, 300), 300);
         QCOMPARE(s.clampY(30, 40, 300), 0);
+    }
+    void monitorLifecycleModel() {
+        using Controller = MultiMonitorController;
+        auto delta = Controller::screenDelta({}, {QStringLiteral("HDMI-A-1")});
+        QCOMPARE(delta.added, QStringList{QStringLiteral("HDMI-A-1")});
+        QVERIFY(delta.removed.isEmpty());
+
+        delta = Controller::screenDelta({QStringLiteral("eDP-1")},
+                                        {QStringLiteral("eDP-1"), QStringLiteral("HDMI-A-1")});
+        QCOMPARE(delta.added, QStringList{QStringLiteral("HDMI-A-1")});
+        QVERIFY(delta.removed.isEmpty());
+
+        delta = Controller::screenDelta({QStringLiteral("eDP-1"), QStringLiteral("HDMI-A-1")},
+                                        {QStringLiteral("eDP-1")});
+        QVERIFY(delta.added.isEmpty());
+        QCOMPARE(delta.removed, QStringList{QStringLiteral("HDMI-A-1")});
+
+        delta = Controller::screenDelta(
+            {QStringLiteral("eDP-1"), QStringLiteral("HDMI-A-1")},
+            {QStringLiteral("eDP-1"), QStringLiteral("eDP-1"), QStringLiteral("HDMI-A-1")});
+        QVERIFY(delta.added.isEmpty());
+        QVERIFY(delta.removed.isEmpty());
+        QCOMPARE(Controller::uniqueScreenNames({QStringLiteral("HDMI-A-1"), QStringLiteral("eDP-1"),
+                                                QStringLiteral("HDMI-A-1"), QString()}),
+                 (QStringList{QStringLiteral("HDMI-A-1"), QStringLiteral("eDP-1")}));
+
+        QCOMPARE(LayerShellWindowController::clampSurfaceSize(QSize(720, 900), QSize(1920, 1080)),
+                 QSize(720, 900));
+        QCOMPARE(LayerShellWindowController::clampSurfaceSize(QSize(720, 900), QSize(320, 240)),
+                 QSize(320, 240));
+        QCOMPARE(LayerShellWindowController::clampSurfaceSize(QSize(720, 900), QSize(0, 0)), QSize(0, 0));
+    }
+    void sharedDocumentObservers() {
+        DocumentStore documents;
+        QSignalSpy firstSurface(&documents, &DocumentStore::goalsChanged);
+        QSignalSpy secondSurface(&documents, &DocumentStore::goalsChanged);
+        documents.setDocument(QStringLiteral("goals"), QStringLiteral("- [ ] Shared\n"));
+        QCOMPARE(firstSurface.count(), 1);
+        QCOMPARE(secondSurface.count(), 1);
+        QCOMPARE(documents.goals(), QStringLiteral("- [ ] Shared\n"));
     }
     void markdownRoundTrip() {
         const QString text =

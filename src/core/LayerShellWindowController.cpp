@@ -1,18 +1,22 @@
 #include "LayerShellWindowController.hpp"
 #include "SettingsManager.hpp"
 #include <LayerShellQt/Window>
-#include <QGuiApplication>
 #include <QScreen>
-#include <QTimer>
 LayerShellWindowController::LayerShellWindowController(SettingsManager *s, QObject *p)
     : QObject(p), m_settings(s) {}
-bool LayerShellWindowController::initialize(QQuickWindow *window) {
+bool LayerShellWindowController::initialize(QQuickWindow *window, QScreen *screen) {
     if (m_window)
         return m_window == window;
     m_window = window;
+    if (screen)
+        window->setScreen(screen);
     m_layer = LayerShellQt::Window::get(window);
     if (!m_layer)
         return false;
+    // LayerShellQt 6.6+ binds the output through setScreen(). Set both the
+    // QWindow and layer-shell target before the first show/map.
+    if (screen)
+        m_layer->setScreen(screen);
     m_layer->setScope(QStringLiteral("focusboard"));
     m_layer->setLayer(LayerShellQt::Window::LayerBottom);
     m_layer->setExclusiveZone(0);
@@ -26,20 +30,7 @@ bool LayerShellWindowController::initialize(QQuickWindow *window) {
         watchScreen(s);
         updateGeometry();
     });
-    connect(qGuiApp, &QGuiApplication::screenRemoved, this, [this] {
-        QTimer::singleShot(0, this, [this] {
-            if (!m_window)
-                return;
-            const bool visible = m_window->isVisible();
-            m_window->hide();
-            m_layer->setScreen(QGuiApplication::primaryScreen());
-            m_window->setScreen(QGuiApplication::primaryScreen());
-            updateGeometry();
-            if (visible)
-                m_window->show();
-        });
-    });
-    watchScreen(window->screen());
+    watchScreen(screen ? screen : window->screen());
     updateGeometry();
     return true;
 }
@@ -52,14 +43,16 @@ void LayerShellWindowController::watchScreen(QScreen *screen) {
             Qt::UniqueConnection);
     connect(screen, &QScreen::logicalDotsPerInchChanged, this, &LayerShellWindowController::updateGeometry,
             Qt::UniqueConnection);
+    connect(screen, &QScreen::physicalDotsPerInchChanged, this, &LayerShellWindowController::updateGeometry,
+            Qt::UniqueConnection);
 }
 void LayerShellWindowController::updateGeometry() {
     if (!m_window || !m_layer || !m_window->screen())
         return;
     const QSize available = m_window->screen()->availableGeometry().size();
-    const QSize size(
-        qMin(m_settings->width(), available.width()),
-        qMin(m_settings->compact() && !m_paletteOpen ? 84 : m_settings->height(), available.height()));
+    const QSize size = clampSurfaceSize(
+        QSize(m_settings->width(), m_settings->compact() && !m_paletteOpen ? 84 : m_settings->height()),
+        available);
     m_window->resize(size);
     m_layer->setDesiredSize(size);
     const QString corner = m_settings->corner();
@@ -70,6 +63,10 @@ void LayerShellWindowController::updateGeometry() {
     const int x = m_settings->clampX(m_settings->rightMargin(), available.width(), size.width());
     const int y = m_settings->clampY(m_settings->topMargin(), available.height(), size.height());
     m_layer->setMargins(QMargins(left ? x : 0, top ? y : 0, left ? 0 : x, top ? 0 : y));
+}
+QSize LayerShellWindowController::clampSurfaceSize(const QSize &requested, const QSize &available) {
+    return QSize(qMax(0, qMin(requested.width(), available.width())),
+                 qMax(0, qMin(requested.height(), available.height())));
 }
 void LayerShellWindowController::applySize(int w, int h) {
     m_settings->setWidth(w);

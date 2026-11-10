@@ -2,6 +2,8 @@
 #include <QObject>
 #include <QPointer>
 #include <QQuickWindow>
+#include <QScreen>
+#include <QSize>
 #include <QtQml/qqmlregistration.h>
 namespace LayerShellQt {
 class Window;
@@ -13,12 +15,13 @@ class LayerShellWindowController final : public QObject {
     QML_UNCREATABLE("Provided by the application")
   public:
     explicit LayerShellWindowController(SettingsManager *settings, QObject *parent = nullptr);
-    bool initialize(QQuickWindow *window);
+    bool initialize(QQuickWindow *window, QScreen *screen = nullptr);
     Q_INVOKABLE void resizeBy(int dx, int dy);
     Q_INVOKABLE void beginDrag(int globalX, int globalY);
     Q_INVOKABLE void dragTo(int globalX, int globalY);
     Q_INVOKABLE void applySize(int width, int height);
     Q_INVOKABLE void setPaletteOpen(bool open);
+    static QSize clampSurfaceSize(const QSize &requested, const QSize &available);
 
   private:
     QPointer<QQuickWindow> m_window;

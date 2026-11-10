@@ -32,10 +32,12 @@ jobs:
           QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software ctest --test-dir build --output-on-failure
           /usr/lib/qt6/bin/qmllint -I build qml/Main.qml qml/components/*.qml
           desktop-file-validate build/focusboard.desktop
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
+          # --check is supported by git diff and git show. Handle shallow and
+          # root commits without relying on the invalid `git diff --root` flag.
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
             git diff --check HEAD^ HEAD
           else
-            git diff --check --root HEAD
+            git show --format= --check HEAD
           fi
       - name: Verify staged installation
         run: |

@@ -1,5 +1,10 @@
 # Focusboard
 
+Focusboard automatically appears on every connected monitor. All gadgets share
+the same Markdown content and application state; no display configuration is
+required. Surfaces are bound to their respective Wayland outputs through
+LayerShellQt and stay on the desktop layer below ordinary application windows.
+
 A quiet Markdown gadget for KDE Plasma 6 on Wayland. It sits on the desktop; ordinary windows cover it. Goals and notes stay in local files.
 
 Focusboard supports KDE Plasma 6 Wayland with KWin and LayerShellQt. Other desktops and X11 are untested or unsupported. It uses C++20, Qt Quick/QML, LayerShellQt, QSettings, and plain Markdown files. No screenshot is bundled yet.
@@ -74,7 +79,7 @@ done
 
 The package installs the SVG at `/usr/share/icons/hicolor/scalable/apps/focusboard.svg` and PNGs in matching hicolor directories.
 
-Focusboard uses LayerShellQt's bottom layer with no reserved workspace. Visibility and stacking depend on KWin and should be checked in the target KDE Wayland session, especially with multiple monitors. It cannot cover the lock screen or compositor-controlled overlays. Offscreen tests do not verify compositor behavior.
+Focusboard uses LayerShellQt's bottom layer with no reserved workspace. KWin controls final stacking and output assignment. Check the target KDE Wayland session with multiple monitors, including hot-plug, unplug, resolution changes, and mixed scaling. Disconnected outputs lose their gadget surface; connecting them creates one automatically. It cannot cover the lock screen or compositor-controlled overlays. Offscreen tests do not verify compositor behavior.
 
 To test manually, expose the desktop and overlap the gadget with a normal window; then check dragging, resizing, hide/show, autostart after login, and monitor or scale changes. The automated tests use temporary data directories and do not touch your documents.
 
