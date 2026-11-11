@@ -1,15 +1,13 @@
 # Focusboard
 
-A quiet native Markdown desktop gadget for goals and notes. One process creates
-one gadget per connected monitor, with synchronized Markdown, themes, zoom,
-compact mode, commands, autosave, and a single tray icon. No display setup is required.
+A quiet native Markdown desktop gadget for goals and notes, with synchronized Markdown, themes, zoom,
+compact mode, commands, autosave, and a single tray icon.
 
 **Linux:** KDE Plasma 6 Wayland with KWin and LayerShellQt, using the bottom
-desktop layer. X11 and other desktops are unsupported or untested.
+desktop layer.
 **Windows:** a new bottom-stacked Qt/Win32 backend targeting Windows 11 x64 and
 Windows 10 x64 (1809+ with the selected Qt 6.8 build). Windows compilation,
 packaging, and desktop behavior still require the first Windows CI/manual validation.
-Do not interpret this implementation as verified Windows 7 gadget parity.
 
 ## Windows
 
@@ -110,21 +108,4 @@ release-artifacts, and writes actual size/checksum reports. PowerShell 7 and
 the development tools are needed by maintainers only. Remove the two test
 environment variables before launching the normal GUI.
 
-The icon source is `assets/icons/focusboard.svg`; PNG exports for 16–256 px live beside it. After editing the SVG, regenerate them with `rsvg-convert`:
-
-```sh
-for size in 16 32 48 64 128 256; do
-  rsvg-convert -w "$size" -h "$size" assets/icons/focusboard.svg \
-    -o "assets/icons/${size}x${size}.png"
-done
-```
-
-The package installs the SVG at `/usr/share/icons/hicolor/scalable/apps/focusboard.svg` and PNGs in matching hicolor directories.
-
-Focusboard uses LayerShellQt's bottom layer with no reserved workspace. KWin controls final stacking and output assignment. Check the target KDE Wayland session with multiple monitors, including hot-plug, unplug, resolution changes, and mixed scaling. Disconnected outputs lose their gadget surface; connecting them creates one automatically. It cannot cover the lock screen or compositor-controlled overlays. Offscreen tests do not verify compositor behavior.
-
-To test manually, expose the desktop and overlap the gadget with a normal window; then check dragging, resizing, hide/show, autostart after login, and monitor or scale changes. The automated tests use temporary data directories and do not touch your documents.
-
 The repository is [on GitHub](https://github.com/cristopherpp/focusboard). CI builds and tests in an Arch container and on a Windows/MSVC runner; its compositor behavior still needs a KDE session. See [CONTRIBUTING.md](CONTRIBUTING.md) for pull requests, [CHANGELOG.md](CHANGELOG.md) for version policy, and [PERFORMANCE.md](PERFORMANCE.md) for profiling notes.
-
-The `focusboard-git` AUR recipe is prepared in `packaging/aur/focusboard-git/`. Once submitted to AUR, install it with `yay -S focusboard-git`, or clone its AUR Git repository and run `makepkg -si` as your normal user. See [packaging/README.md](packaging/README.md) for packaging and submission steps. It has not been published to AUR by this repository.
