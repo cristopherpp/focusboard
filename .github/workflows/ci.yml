@@ -17,12 +17,20 @@ jobs:
       run:
         shell: bash
     steps:
+      - name: Install Git before checkout
+        run: pacman -Syu --noconfirm --needed git
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+      - name: Verify Git checkout
+        run: |
+          test -d .git
+          git rev-parse --is-inside-work-tree
+          git rev-parse --verify HEAD
+          git cat-file -e 'HEAD^{commit}'
       - name: Install declared build and validation tools
         run: |
-          pacman -Syu --noconfirm --needed base-devel cmake ninja git \
+          pacman -S --noconfirm --needed base-devel cmake ninja \
             qt6-base qt6-declarative qt6-wayland qt6-svg layer-shell-qt \
             ttf-dejavu desktop-file-utils namcap util-linux
       - name: Build, test, and lint

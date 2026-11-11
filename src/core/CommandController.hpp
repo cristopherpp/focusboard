@@ -18,7 +18,7 @@ struct Checklist {
     static QString append(const QString &source, const QString &text, QString *error = nullptr);
 };
 
-class CommandController final : public QObject {
+class CommandController : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("Provided by the application")

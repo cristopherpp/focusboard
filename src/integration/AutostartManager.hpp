@@ -5,7 +5,7 @@
 #include <QSettings>
 #endif
 #include <QtQml/qqmlregistration.h>
-class AutostartManager final : public QObject {
+class AutostartManager : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("Provided by the application")

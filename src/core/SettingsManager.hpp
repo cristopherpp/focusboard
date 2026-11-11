@@ -3,7 +3,7 @@
 #include <QSettings>
 #include <QtQml/qqmlregistration.h>
 
-class SettingsManager final : public QObject {
+class SettingsManager : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("Provided by the application")

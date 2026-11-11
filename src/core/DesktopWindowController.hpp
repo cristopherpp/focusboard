@@ -9,7 +9,7 @@ namespace LayerShellQt {
 class Window;
 }
 class SettingsManager;
-class DesktopWindowController final : public QObject {
+class DesktopWindowController : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("Provided by the application")

@@ -6,7 +6,7 @@
 #include <QTimer>
 #include <QtQml/qqmlregistration.h>
 
-class DocumentStore final : public QObject {
+class DocumentStore : public QObject {
     Q_OBJECT
     QML_ELEMENT
     QML_UNCREATABLE("Provided by the application")
