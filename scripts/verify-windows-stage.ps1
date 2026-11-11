@@ -7,7 +7,7 @@ $stage = (Resolve-Path $StageDir).Path
 $required = @(
     'Focusboard.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Qml.dll',
     'Qt6Quick.dll', 'Qt6QuickControls2.dll', 'Qt6Widgets.dll', 'qt.conf',
-    'plugins/platforms/qwindows.dll', 'plugins/platforms/qoffscreen.dll',
+    'plugins/platforms/qwindows.dll',
     'qml/QtQuick/qmldir', 'qml/QtQuick/Controls/qmldir', 'qml/QtQuick/Controls/Fusion/qmldir',
     'msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'msvcp140_atomic_wait.dll',
     'vcruntime140.dll', 'vcruntime140_1.dll', 'LICENSE'
@@ -67,7 +67,7 @@ foreach ($name in @('QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH', 'QML_IMPORT
     [void]$start.Environment.Remove($name)
 }
 $start.Environment['PATH'] = "$stage;$env:SystemRoot\System32;$env:SystemRoot"
-$start.Environment['QT_QPA_PLATFORM'] = 'offscreen'
+$start.Environment['QT_QPA_PLATFORM'] = 'windows'
 $start.Environment['QT_QUICK_BACKEND'] = 'software'
 $process = [Diagnostics.Process]::Start($start)
 try {
