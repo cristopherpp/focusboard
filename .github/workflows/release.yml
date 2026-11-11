@@ -25,9 +25,23 @@ jobs:
           test "v$version" = "$GITHUB_REF_NAME"
       - uses: actions/download-artifact@v4
         with:
-          name: focusboard-arch-package
+          pattern: focusboard-*-package*
+          merge-multiple: true
           path: artifacts
-      - name: Create a draft release with the tested package
+      - name: Create or update the draft with tested Linux and Windows packages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/*.pkg.tar.zst --draft --verify-tag --generate-notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" --json isDraft > release-state.json; then
+            test "$(jq -r .isDraft release-state.json)" = true || {
+              echo "Refusing to modify an already published release." >&2
+              exit 1
+            }
+            gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber
+          else
+            # A failed lookup never edits another release; create fails safely
+            # if an existing release could not be read.
+            gh release create "$GITHUB_REF_NAME" artifacts/* --draft --verify-tag --generate-notes
+          fi

@@ -7,8 +7,10 @@
 #include <QStandardPaths>
 #include <QStringDecoder>
 
-DocumentStore::DocumentStore(QObject *parent) : QObject(parent) {
-    m_directory = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+DocumentStore::DocumentStore(QObject *parent)
+    : DocumentStore(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), parent) {}
+DocumentStore::DocumentStore(const QString &directory, QObject *parent)
+    : QObject(parent), m_directory(directory) {
     m_saveTimer.setSingleShot(true);
     m_saveTimer.setInterval(400);
     connect(&m_saveTimer, &QTimer::timeout, this, &DocumentStore::flush);

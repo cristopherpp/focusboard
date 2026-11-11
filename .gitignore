@@ -21,3 +21,13 @@ __pycache__/
 *~
 .SRCINFO
 !packaging/aur/focusboard-git/.SRCINFO
+/stage-windows/
+/release-artifacts/
+*.dll
+*.exe
+*.zip
+*.pdb
+*.obj
+*.lib
+*.ilk
+*.exp

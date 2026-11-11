@@ -2,8 +2,8 @@
 
 #include "AutostartManager.hpp"
 #include "CommandController.hpp"
+#include "DesktopWindowController.hpp"
 #include "DocumentStore.hpp"
-#include "LayerShellWindowController.hpp"
 #include "SettingsManager.hpp"
 
 #include <QFile>
@@ -18,7 +18,7 @@
 struct MultiMonitorController::Surface {
     QPointer<QScreen> screen;
     QPointer<QQuickWindow> window;
-    LayerShellWindowController *layerController = nullptr;
+    DesktopWindowController *desktopController = nullptr;
 };
 
 MultiMonitorController::MultiMonitorController(QQmlEngine *engine, DocumentStore *documents,
@@ -115,18 +115,18 @@ bool MultiMonitorController::createSurface(QScreen *screen) {
 
     auto *surface = new Surface;
     surface->screen = screen;
-    surface->layerController = new LayerShellWindowController(m_settings, this);
+    surface->desktopController = new DesktopWindowController(m_settings, this);
 
     QQmlComponent component(m_engine, mainQmlUrl());
     if (!QFile::exists(QStringLiteral(":/qt/qml/Focusboard/qml/Main.qml"))) {
         qCritical().noquote() << "Focusboard QML resource is missing:" << mainQmlUrl();
-        delete surface->layerController;
+        delete surface->desktopController;
         delete surface;
         return false;
     }
     if (component.status() != QQmlComponent::Ready) {
         qCritical().noquote() << "Focusboard Main.qml failed to compile:" << component.errors();
-        delete surface->layerController;
+        delete surface->desktopController;
         delete surface;
         return false;
     }
@@ -134,7 +134,7 @@ bool MultiMonitorController::createSurface(QScreen *screen) {
         {QStringLiteral("documents"), QVariant::fromValue(m_documents)},
         {QStringLiteral("settings"), QVariant::fromValue(m_settings)},
         {QStringLiteral("commands"), QVariant::fromValue(m_commands)},
-        {QStringLiteral("layerController"), QVariant::fromValue(surface->layerController)},
+        {QStringLiteral("desktopController"), QVariant::fromValue(surface->desktopController)},
         {QStringLiteral("autostartManager"), QVariant::fromValue(m_autostart)},
         {QStringLiteral("offerAutostart"), m_offerAutostart && screen == qGuiApp->primaryScreen()},
     };
@@ -144,17 +144,17 @@ bool MultiMonitorController::createSurface(QScreen *screen) {
         qCritical().noquote() << "Focusboard could not instantiate compiled Main.qml on" << key
                               << component.errors();
         delete object;
-        delete surface->layerController;
+        delete surface->desktopController;
         delete surface;
         return false;
     }
     window->QObject::setParent(this);
     surface->window = window;
-    if (!surface->layerController->initialize(window, screen)) {
-        qCritical().noquote() << "Focusboard could not initialize its Wayland layer-shell surface on" << key
-                              << "(check the Wayland layer-shell integration and output availability).";
+    if (!surface->desktopController->initialize(window, screen)) {
+        qCritical().noquote() << "Focusboard could not initialize its desktop window on" << key
+                              << "(check platform integration and output availability).";
         delete window;
-        delete surface->layerController;
+        delete surface->desktopController;
         delete surface;
         return false;
     }
@@ -175,7 +175,7 @@ void MultiMonitorController::destroySurface(const QString &key) {
         surface->window->hide();
         delete surface->window;
     }
-    delete surface->layerController;
+    delete surface->desktopController;
     delete surface;
 }
 
@@ -203,8 +203,12 @@ bool MultiMonitorController::isVisible() const { return m_visible; }
 void MultiMonitorController::showAll(bool activate) {
     m_visible = true;
     for (Surface *surface : m_surfaces)
-        if (surface->window)
-            surface->window->show();
+        if (surface->window) {
+            if (surface->window->windowState() == Qt::WindowMinimized)
+                surface->window->showNormal();
+            else
+                surface->window->show();
+        }
     if (activate)
         if (QQuickWindow *window = primaryWindow())
             window->requestActivate();

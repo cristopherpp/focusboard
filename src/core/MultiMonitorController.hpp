@@ -9,7 +9,7 @@
 class AutostartManager;
 class CommandController;
 class DocumentStore;
-class LayerShellWindowController;
+class DesktopWindowController;
 class QQuickWindow;
 class QScreen;
 class QQmlEngine;

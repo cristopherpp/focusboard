@@ -3,7 +3,8 @@
 #include <QStyleHints>
 #include <algorithm>
 SettingsManager::SettingsManager(QObject *parent)
-    : QObject(parent), m_settings(QStringLiteral("Focusboard"), QStringLiteral("Focusboard")) {
+    : QObject(parent), m_settings(QSettings::defaultFormat(), QSettings::UserScope,
+                                  QStringLiteral("Focusboard"), QStringLiteral("Focusboard")) {
     if (auto *app = qobject_cast<QGuiApplication *>(QCoreApplication::instance()))
         connect(app->styleHints(), &QStyleHints::colorSchemeChanged, this,
                 &SettingsManager::systemDarkChanged);

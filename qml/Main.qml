@@ -8,7 +8,7 @@ ApplicationWindow {
     required property DocumentStore documents
     required property SettingsManager settings
     required property CommandController commands
-    required property LayerShellWindowController layerController
+    required property DesktopWindowController desktopController
     required property AutostartManager autostartManager
     required property bool offerAutostart
     property string autostartPromptError: ""
@@ -155,8 +155,8 @@ ApplicationWindow {
         color: root.ink; opacity: hover.hovered || grip.pressed ? 0.25 : 0
         MouseArea {
             id: grip; anchors.fill: parent; cursorShape: Qt.SizeAllCursor
-            onPressed: function(mouse) { const p=mapToGlobal(mouse.x,mouse.y); root.layerController.beginDrag(p.x,p.y) }
-            onPositionChanged: function(mouse) { if(pressed) { const p=mapToGlobal(mouse.x,mouse.y); root.layerController.dragTo(p.x,p.y) } }
+            onPressed: function(mouse) { const p=mapToGlobal(mouse.x,mouse.y); root.desktopController.beginDrag(p.x,p.y) }
+            onPositionChanged: function(mouse) { if(pressed) { const p=mapToGlobal(mouse.x,mouse.y); root.desktopController.dragTo(p.x,p.y) } }
         }
     }
     ResizeHandle {
@@ -164,7 +164,7 @@ ApplicationWindow {
         visible: !root.settings.compact
         opacity: hover.hovered || active ? 0.4 : 0
         ink: root.ink
-        onResize: function(dx,dy) { root.layerController.resizeBy(dx,dy) }
+        onResize: function(dx,dy) { root.desktopController.resizeBy(dx,dy) }
     }
     CommandPalette {
         id: palettePopup
@@ -172,7 +172,7 @@ ApplicationWindow {
         commands: root.commands
         dark: root.dark
         ink: root.ink
-        onVisibleChanged: root.layerController.setPaletteOpen(visible)
+        onVisibleChanged: root.desktopController.setPaletteOpen(visible)
         parent: Overlay.overlay
         width: root.width - 32
         x: 16; y: 16
@@ -197,7 +197,7 @@ ApplicationWindow {
         contentItem: Column {
             spacing: 10
             Text {
-                text: "Start Focusboard at KDE login?"
+                text: Qt.platform.os === "windows" ? "Start Focusboard at Windows login?" : "Start Focusboard at KDE login?"
                 color: root.ink
                 font.pixelSize: 15
                 font.bold: true

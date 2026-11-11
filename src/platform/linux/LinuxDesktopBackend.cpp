@@ -1,10 +1,10 @@
-#include "LayerShellWindowController.hpp"
+#include "DesktopWindowController.hpp"
 #include "SettingsManager.hpp"
 #include <LayerShellQt/Window>
 #include <QScreen>
-LayerShellWindowController::LayerShellWindowController(SettingsManager *s, QObject *p)
+DesktopWindowController::DesktopWindowController(SettingsManager *s, QObject *p)
     : QObject(p), m_settings(s) {}
-bool LayerShellWindowController::initialize(QQuickWindow *window, QScreen *screen) {
+bool DesktopWindowController::initialize(QQuickWindow *window, QScreen *screen) {
     if (m_window)
         return m_window == window;
     m_window = window;
@@ -23,9 +23,9 @@ bool LayerShellWindowController::initialize(QQuickWindow *window, QScreen *scree
     m_layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
     m_layer->setActivateOnShow(false);
     m_layer->setCloseOnDismissed(false);
-    connect(m_settings, &SettingsManager::positionChanged, this, &LayerShellWindowController::updateGeometry);
-    connect(m_settings, &SettingsManager::sizeChanged, this, &LayerShellWindowController::updateGeometry);
-    connect(m_settings, &SettingsManager::compactChanged, this, &LayerShellWindowController::updateGeometry);
+    connect(m_settings, &SettingsManager::positionChanged, this, &DesktopWindowController::updateGeometry);
+    connect(m_settings, &SettingsManager::sizeChanged, this, &DesktopWindowController::updateGeometry);
+    connect(m_settings, &SettingsManager::compactChanged, this, &DesktopWindowController::updateGeometry);
     connect(window, &QWindow::screenChanged, this, [this](QScreen *s) {
         watchScreen(s);
         updateGeometry();
@@ -34,19 +34,19 @@ bool LayerShellWindowController::initialize(QQuickWindow *window, QScreen *scree
     updateGeometry();
     return true;
 }
-void LayerShellWindowController::watchScreen(QScreen *screen) {
+void DesktopWindowController::watchScreen(QScreen *screen) {
     if (!screen)
         return;
-    connect(screen, &QScreen::availableGeometryChanged, this, &LayerShellWindowController::updateGeometry,
+    connect(screen, &QScreen::availableGeometryChanged, this, &DesktopWindowController::updateGeometry,
             Qt::UniqueConnection);
-    connect(screen, &QScreen::geometryChanged, this, &LayerShellWindowController::updateGeometry,
+    connect(screen, &QScreen::geometryChanged, this, &DesktopWindowController::updateGeometry,
             Qt::UniqueConnection);
-    connect(screen, &QScreen::logicalDotsPerInchChanged, this, &LayerShellWindowController::updateGeometry,
+    connect(screen, &QScreen::logicalDotsPerInchChanged, this, &DesktopWindowController::updateGeometry,
             Qt::UniqueConnection);
-    connect(screen, &QScreen::physicalDotsPerInchChanged, this, &LayerShellWindowController::updateGeometry,
+    connect(screen, &QScreen::physicalDotsPerInchChanged, this, &DesktopWindowController::updateGeometry,
             Qt::UniqueConnection);
 }
-void LayerShellWindowController::updateGeometry() {
+void DesktopWindowController::updateGeometry() {
     if (!m_window || !m_layer || !m_window->screen())
         return;
     const QSize available = m_window->screen()->availableGeometry().size();
@@ -64,22 +64,22 @@ void LayerShellWindowController::updateGeometry() {
     const int y = m_settings->clampY(m_settings->topMargin(), available.height(), size.height());
     m_layer->setMargins(QMargins(left ? x : 0, top ? y : 0, left ? 0 : x, top ? 0 : y));
 }
-QSize LayerShellWindowController::clampSurfaceSize(const QSize &requested, const QSize &available) {
+QSize DesktopWindowController::clampSurfaceSize(const QSize &requested, const QSize &available) {
     return QSize(qMax(0, qMin(requested.width(), available.width())),
                  qMax(0, qMin(requested.height(), available.height())));
 }
-void LayerShellWindowController::applySize(int w, int h) {
+void DesktopWindowController::applySize(int w, int h) {
     m_settings->setWidth(w);
     m_settings->setHeight(h);
 }
-void LayerShellWindowController::setPaletteOpen(bool open) {
+void DesktopWindowController::setPaletteOpen(bool open) {
     m_paletteOpen = open;
     updateGeometry();
 }
-void LayerShellWindowController::resizeBy(int dx, int dy) {
+void DesktopWindowController::resizeBy(int dx, int dy) {
     applySize(m_settings->width() + dx, m_settings->height() + dy);
 }
-void LayerShellWindowController::beginDrag(int gx, int gy) {
+void DesktopWindowController::beginDrag(int gx, int gy) {
     if (!m_layer)
         return;
     m_startX = gx;
@@ -88,7 +88,7 @@ void LayerShellWindowController::beginDrag(int gx, int gy) {
     m_startTop = qMax(margins.top(), margins.bottom());
     m_startRight = qMax(margins.left(), margins.right());
 }
-void LayerShellWindowController::dragTo(int gx, int gy) {
+void DesktopWindowController::dragTo(int gx, int gy) {
     if (!m_window || !m_window->screen())
         return;
     const QSize available = m_window->screen()->availableGeometry().size();
