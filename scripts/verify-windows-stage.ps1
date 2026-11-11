@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $stage = (Resolve-Path $StageDir).Path
 $required = @(
     'Focusboard.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Qml.dll',
-    'Qt6Quick.dll', 'Qt6Widgets.dll', 'qt.conf',
+    'Qt6Quick.dll', 'Qt6QuickControls2.dll', 'Qt6Widgets.dll', 'qt.conf',
     'plugins/platforms/qwindows.dll', 'plugins/platforms/qoffscreen.dll',
     'qml/QtQuick/qmldir', 'qml/QtQuick/Controls/qmldir', 'qml/QtQuick/Controls/Fusion/qmldir',
     'msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'msvcp140_atomic_wait.dll',
@@ -16,6 +16,12 @@ foreach ($file in $required) {
     if (!(Test-Path (Join-Path $stage $file) -PathType Leaf)) {
         throw "Missing deployment dependency: $file"
     }
+}
+# The executable and Qt libraries live at Prefix=.; Qt's default relative
+# plugin and QML directories must therefore resolve beside the executable.
+$qtConf = Get-Content (Join-Path $stage 'qt.conf')
+if (!($qtConf -match '^\s*\[Paths\]\s*$') -or !($qtConf -match '^\s*Prefix\s*=\s*\.\s*$')) {
+    throw 'qt.conf must set the deployment prefix to the executable directory'
 }
 $files = Get-ChildItem $stage -Recurse -File
 $forbidden = $files | Where-Object {

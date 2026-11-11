@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 project(Focusboard VERSION 1.0.1 LANGUAGES CXX)
 
+if(WIN32)
+    set(CMAKE_INSTALL_BINDIR "." CACHE PATH "" FORCE)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -11,7 +15,6 @@ include(GNUInstallDirs)
 include(CTest)
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets)
 if(WIN32)
-    set(CMAKE_INSTALL_BINDIR "." CACHE PATH "" FORCE)
     set(platform_sources src/platform/windows/WindowsDesktopBackend.cpp src/platform/windows/WindowsAutostart.cpp)
     set(platform_libraries user32)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
