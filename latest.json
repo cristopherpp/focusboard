@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.1",
+  "platform": "windows",
+  "architecture": "x64",
+  "sourceCommit": "fcbeeb21fd1bc7a7b0892c4f69953656ad831749",
+  "installer": {
+    "filename": "Focusboard-Setup-x64.exe",
+    "size": 28945470,
+    "sha256": "9d8db67cd8c61ea828644e2023a77bd6d2f098bd0827193682cc9b66e9eb62f6"
+  },
+  "portable": {
+    "filename": "Focusboard-Portable-x64.zip",
+    "size": 42383805,
+    "sha256": "bc09b6dedb4a5143f9f71eb343c9a9f70af616f6b8b6a20c46a864b23ffe9cac"
+  }
+}
