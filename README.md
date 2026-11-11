@@ -11,55 +11,27 @@ Windows 10 x64 (1809+ with the selected Qt 6.8 build). Windows compilation,
 packaging, and desktop behavior still require the first Windows CI/manual validation.
 Do not interpret this implementation as verified Windows 7 gadget parity.
 
-## Install on Windows
+## Windows
 
-When Windows artifacts are available on the [releases page](https://github.com/cristopherpp/focusboard/releases):
+After the first successful main build publishes the precompiled package to the repository's `prebuilt` branch:
 
-1. Download **Focusboard-Setup-x64.exe**.
-2. Run the installer.
-3. Launch **Focusboard** from Start.
+```powershell
+git clone https://github.com/cristopherpp/focusboard.git
+cd focusboard
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
+```
 
-Installation is per-user, normally in %LOCALAPPDATA%\Programs\Focusboard.
-No administrator rights, Qt SDK, compiler, or separate runtime download is required.
-The Start Menu shortcut is included; the desktop shortcut is optional.
-The installer neither launches Focusboard nor enables autostart.
+The script verifies the package from this repository and runs its per-user installer. Users need Git, but no compiler, Qt SDK, or administrator privileges. It creates a Start Menu entry and does not launch the app or enable autostart.
 
-For the portable alternative, download **Focusboard-Portable-x64.zip**, extract
-the entire archive, and run **Focusboard.exe**. Keep its DLLs, plugins, and QML
-directories together. Portable and installed copies use the same per-user data
-and single-instance lock; “portable” describes the application files, not a
-separate portable-data mode.
+Update, inspect versions, or uninstall with the same script:
 
-On first launch, choose whether to start at the next Windows login. Change the
-choice later using **Launch at login** in the tray. The application writes one
-quoted executable path to
-HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Focusboard;
-it remembers a declined preference and does not repeatedly prompt. If you move
-a portable folder, toggle autostart off and on from the new location. Windows
-Startup settings can independently disable startup.
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -Update
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -Status
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -Uninstall
+```
 
-Windows documents are %APPDATA%\Focusboard\Focusboard\goals.md and notes.md
-(Qt's QStandardPaths::AppDataLocation). Settings are under
-HKCU\Software\Focusboard\Focusboard. Quit from the tray before upgrading
-or uninstalling. Remove the installed app through Windows Settings → Apps;
-for portable use, disable autostart and delete the extracted folder. Documents
-and settings are preserved. The uninstaller removes only an autostart entry
-that points to that installation.
-
-Unsigned downloads may show an unknown-publisher or Microsoft Defender
-SmartScreen warning. Confirm the repository/release source and published
-SHA-256 checksum before deciding whether to run a download. A matching checksum
-checks file integrity, not publisher identity. Do not disable Windows security
-protections; managed devices may require approval from your administrator.
-
-Windows uses a frameless tool window, not an Explorer-embedded desktop object.
-It requests bottom stacking without always-on-top or Explorer reparenting.
-Win+D/Show Desktop may hide it; use **Show Focusboard** from the tray to recover.
-Virtual desktops follow Windows' normal window placement; the app does not pin
-itself to all virtual desktops. Clicking permits keyboard activation, whose
-interaction with stacking must be verified on Windows. Per-display drag/resize
-geometry is retained independently. Monitor identity changes can reset placement.
-See the [Windows validation checklist](packaging/windows/README.md).
+Windows Settings → Installed apps can also uninstall Focusboard after the checkout is deleted. Documents and settings remain in the current user's profile. Same-origin checksums verify integrity, not independent publisher identity; unsigned downloads may show a Windows security warning. Check the repository origin before installing and keep Windows security protections enabled.
 
 ## Install on Arch Linux
 

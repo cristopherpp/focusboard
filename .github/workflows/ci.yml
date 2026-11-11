@@ -126,3 +126,62 @@ jobs:
           name: focusboard-windows-packages
           path: release-artifacts/*
           if-no-files-found: error
+
+  publish-prebuilt:
+    needs: [arch, windows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: focusboard-prebuilt
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: focusboard-windows-packages
+          path: artifacts
+      - name: Validate packages and prepare metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -nE 's/^project\(Focusboard VERSION ([0-9]+\.[0-9]+\.[0-9]+) LANGUAGES CXX\)$/\1/p' CMakeLists.txt)
+          python3 scripts/publish-prebuilt.py artifacts published "$version" "$GITHUB_SHA"
+      - name: Publish one orphan commit to prebuilt
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main=$(git ls-remote origin refs/heads/main | cut -f1)
+          test "$remote_main" = "$GITHUB_SHA" || { echo 'A newer main commit exists; refusing stale publication.' >&2; exit 1; }
+          git -C published init -q
+          git -C published config user.name 'github-actions[bot]'
+          git -C published config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C published add -- Focusboard-Setup-x64.exe Focusboard-Portable-x64.zip latest.json SHA256SUMS.txt
+          git -C published commit -qm "Prebuilt Focusboard $GITHUB_SHA"
+          git -C published remote add origin "$(git remote get-url origin)"
+          # checkout's credential is scoped to its local Git config; carry it
+          # into this temporary repository without committing or printing it.
+          git -C published config --local http.https://github.com/.extraheader "$(git config --local --get http.https://github.com/.extraheader)"
+          git -C published push --force origin HEAD:refs/heads/prebuilt
+          echo "Published Focusboard $(python3 -c 'import json; print(json.load(open("published/latest.json"))["version"])') from $GITHUB_SHA"
+
+  smoke-prebuilt-install:
+    needs: publish-prebuilt
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install, inspect, repeat, and uninstall published package
+        shell: pwsh
+        run: |
+          ./scripts/install-windows.ps1 -Status
+          ./scripts/install-windows.ps1
+          ./scripts/install-windows.ps1 -Update
+          ./scripts/install-windows.ps1 -Uninstall
+          if (Test-Path "$env:LOCALAPPDATA\Programs\Focusboard\Focusboard.exe") { throw 'Uninstall left the application executable' }
