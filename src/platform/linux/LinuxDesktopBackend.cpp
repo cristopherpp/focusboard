@@ -95,6 +95,7 @@ void DesktopWindowController::dragTo(int gx, int gy) {
     const auto corner = m_settings->corner();
     const int x = m_startRight + (gx - m_startX) * (corner.endsWith(QStringLiteral("left")) ? 1 : -1);
     const int y = m_startTop + (gy - m_startY) * (corner.startsWith(QStringLiteral("top")) ? 1 : -1);
-    m_settings->setRightMargin(m_settings->clampX(x, available.width(), m_window->width()));
-    m_settings->setTopMargin(m_settings->clampY(y, available.height(), m_window->height()));
+    m_settings->setPositionMargins(m_settings->clampX(x, available.width(), m_window->width()),
+                                   m_settings->clampY(y, available.height(), m_window->height()));
 }
+void DesktopWindowController::endDrag() { m_settings->sync(); }

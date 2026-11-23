@@ -49,6 +49,24 @@ class PresentationTests : public QObject {
                 .value<QImage>();
         QCOMPARE(remote.size(), QSize(1, 1));
     }
+    void markdownPreviewSpacing() {
+        MarkdownPreview preview;
+        preview.setWidth(400);
+        preview.setSource(QStringLiteral("first second"));
+        const auto oneLine = preview.implicitHeight();
+        preview.setSource(QStringLiteral("first\nsecond"));
+        const auto twoLines = preview.implicitHeight();
+        QVERIFY(twoLines > oneLine);
+        preview.setSource(QStringLiteral("first\n\nsecond"));
+        const auto blankLine = preview.implicitHeight();
+        QVERIFY(blankLine > twoLines);
+        preview.setSource(QStringLiteral("first\r\n  \r\n\r\nsecond"));
+        QVERIFY(preview.implicitHeight() > blankLine);
+        preview.setSource(QStringLiteral("```\na\n\nb\n```"));
+        const auto codeHeight = preview.implicitHeight();
+        preview.setSource(QStringLiteral("```\na\nx\nb\n```"));
+        QCOMPARE(preview.implicitHeight(), codeHeight);
+    }
     void keyboardPreviewEditAndCommands() {
         DocumentStore documents(environment.filePath(QStringLiteral("documents")));
         SettingsManager settings;
@@ -82,6 +100,29 @@ class PresentationTests : public QObject {
         QVERIFY(QTest::qWaitForWindowExposed(window));
         window->requestActivate();
         QTRY_VERIFY(window->isActive());
+        auto *divider = object->findChild<QQuickItem *>("sectionDivider");
+        QVERIFY(divider);
+        QVERIFY(!divider->isVisible());
+        documents.setDocument("notes", "A note");
+        QVERIFY(divider->isVisible());
+        const QString originalGoals = documents.goals();
+        documents.setDocument("goals", " \n");
+        QVERIFY(!divider->isVisible());
+        documents.setDocument("notes", "");
+        QVERIFY(!divider->isVisible());
+        documents.setDocument("goals", originalGoals);
+
+        auto *grip = object->findChild<QQuickItem *>("moveGrip");
+        QVERIFY(grip);
+        const QPoint start = grip->mapToScene(QPointF(grip->width() / 2, grip->height() / 2)).toPoint();
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start);
+        const QPointF pressPosition = grip->property("currentPosition").toPointF();
+        QTest::mouseMove(window, start + QPoint(30, 10));
+        QTRY_VERIFY(grip->property("currentPosition").toPointF() != pressPosition);
+        QTRY_COMPARE(grip->property("currentPosition").toPointF(),
+                     grip->property("targetPosition").toPointF());
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, start + QPoint(30, 10));
+
         auto *palette = object->findChild<QObject *>("commandPalette");
         QVERIFY(palette);
         auto *input = object->findChild<QObject *>("commandInput");

@@ -95,21 +95,22 @@ void SettingsManager::setMargin(int v) {
 int SettingsManager::topMargin() const {
     return std::clamp(m_settings.value(QStringLiteral("topMargin"), margin()).toInt(), 0, 10000);
 }
-void SettingsManager::setTopMargin(int v) {
-    v = std::clamp(v, 0, 10000);
-    if (v == topMargin())
-        return;
-    m_settings.setValue(QStringLiteral("topMargin"), v);
-    emit positionChanged();
-}
+void SettingsManager::setTopMargin(int v) { setPositionMargins(rightMargin(), v); }
 int SettingsManager::rightMargin() const {
     return std::clamp(m_settings.value(QStringLiteral("rightMargin"), margin()).toInt(), 0, 10000);
 }
-void SettingsManager::setRightMargin(int v) {
-    v = std::clamp(v, 0, 10000);
-    if (v == rightMargin())
+void SettingsManager::setRightMargin(int v) { setPositionMargins(v, topMargin()); }
+void SettingsManager::setPositionMargins(int right, int top) {
+    right = std::clamp(right, 0, 10000);
+    top = std::clamp(top, 0, 10000);
+    const bool movedX = right != rightMargin();
+    const bool movedY = top != topMargin();
+    if (!movedX && !movedY)
         return;
-    m_settings.setValue(QStringLiteral("rightMargin"), v);
+    if (movedX)
+        m_settings.setValue(QStringLiteral("rightMargin"), right);
+    if (movedY)
+        m_settings.setValue(QStringLiteral("topMargin"), top);
     emit positionChanged();
 }
 bool SettingsManager::autostart() const {

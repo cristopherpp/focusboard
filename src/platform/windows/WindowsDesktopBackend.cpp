@@ -131,5 +131,7 @@ void DesktopWindowController::beginDrag(int x, int y) {
 void DesktopWindowController::dragTo(int x, int y) {
     m_geometry.moveTopLeft(QPoint(m_startRight + x - m_startX, m_startTop + y - m_startY));
     updateGeometry();
+}
+void DesktopWindowController::endDrag() {
     saveGeometry();
 }

@@ -39,6 +39,7 @@ class SettingsManager : public QObject {
     void setTopMargin(int value);
     int rightMargin() const;
     void setRightMargin(int value);
+    void setPositionMargins(int right, int top);
     bool autostart() const;
     void setAutostart(bool value);
     bool hasAutostartPreference() const;

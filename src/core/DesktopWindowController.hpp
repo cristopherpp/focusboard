@@ -19,6 +19,7 @@ class DesktopWindowController : public QObject {
     Q_INVOKABLE void resizeBy(int dx, int dy);
     Q_INVOKABLE void beginDrag(int globalX, int globalY);
     Q_INVOKABLE void dragTo(int globalX, int globalY);
+    Q_INVOKABLE void endDrag();
     Q_INVOKABLE void applySize(int width, int height);
     Q_INVOKABLE void setPaletteOpen(bool open);
     static QSize clampSurfaceSize(const QSize &requested, const QSize &available);

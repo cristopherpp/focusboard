@@ -18,6 +18,8 @@ ApplicationWindow {
     color: "transparent"
     property bool dark: root.settings.theme === "dark" || (root.settings.theme === "system" && root.settings.systemDark)
     property color ink: dark ? "#f0f1f4" : "#252831"
+    readonly property bool hasGoals: root.documents.goals.trim().length > 0
+    readonly property bool hasNotes: root.documents.notes.trim().length > 0
     property string editing: ""
     property bool editLoading: false
     palette.text: ink
@@ -101,12 +103,20 @@ ApplicationWindow {
             Column {
                 id: previewColumn
                 width: previewScroll.width
-                spacing: root.documents.goals.length && root.documents.notes.length ? 18 : 0
-                MarkdownPreview { width: parent.width; height: implicitHeight; source: root.documents.goals; visible: source.length > 0; fontSize: root.settings.zoom; foreground: root.ink }
-                MarkdownPreview { width: parent.width; height: implicitHeight; source: root.documents.notes; visible: source.length > 0; fontSize: root.settings.zoom; foreground: root.ink }
+                spacing: 12
+                MarkdownPreview { width: parent.width; height: implicitHeight; source: root.documents.goals; visible: root.hasGoals; fontSize: root.settings.zoom; foreground: root.ink }
+                Rectangle {
+                    objectName: "sectionDivider"
+                    width: parent.width
+                    height: 1
+                    color: root.ink
+                    opacity: 0.18
+                    visible: root.hasGoals && root.hasNotes
+                }
+                MarkdownPreview { width: parent.width; height: implicitHeight; source: root.documents.notes; visible: root.hasNotes; fontSize: root.settings.zoom; foreground: root.ink }
                 Text {
                     width: parent.width
-                    visible: !root.documents.goals.length && !root.documents.notes.length
+                    visible: !root.hasGoals && !root.hasNotes
                     text: "A quiet place for your thoughts.\n\nCtrl+K → :edit goals or :edit notes"
                     color: root.ink
                     opacity: 0.65
@@ -118,7 +128,7 @@ ApplicationWindow {
         MarkdownPreview {
             anchors.fill: parent; anchors.margins: 22
             visible: root.settings.compact
-            source: (root.documents.goals || root.documents.notes).split("\n").filter(function(line) { return line.trim().length > 0 })[0] || "Ctrl+K to begin"
+            source: (root.hasGoals ? root.documents.goals : root.documents.notes).split("\n").filter(function(line) { return line.trim().length > 0 })[0] || "Ctrl+K to begin"
             clip: true
             fontSize: root.settings.zoom
             foreground: root.ink
@@ -147,16 +157,54 @@ ApplicationWindow {
             }
         }
     }
-    // Hover-only grip. Pointer deltas use screen coordinates, never QWindow::move().
-    Rectangle {
-        anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter
-        anchors.topMargin: 5
-        width: 38; height: 10; radius: 5
-        color: root.ink; opacity: hover.hovered || grip.pressed ? 0.25 : 0
-        MouseArea {
-            id: grip; anchors.fill: parent; cursorShape: Qt.SizeAllCursor
-            onPressed: function(mouse) { const p=mapToGlobal(mouse.x,mouse.y); root.desktopController.beginDrag(p.x,p.y) }
-            onPositionChanged: function(mouse) { if(pressed) { const p=mapToGlobal(mouse.x,mouse.y); root.desktopController.dragTo(p.x,p.y) } }
+    MouseArea {
+        id: grip
+        objectName: "moveGrip"
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: 76
+        height: 22
+        hoverEnabled: true
+        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+        property point targetPosition
+        property point currentPosition
+
+        onPressed: function(mouse) {
+            currentPosition = mapToGlobal(mouse.x, mouse.y)
+            targetPosition = currentPosition
+            root.desktopController.beginDrag(currentPosition.x, currentPosition.y)
+        }
+        onPositionChanged: function(mouse) {
+            if (pressed) targetPosition = mapToGlobal(mouse.x, mouse.y)
+        }
+        onReleased: function(mouse) {
+            const end = mapToGlobal(mouse.x, mouse.y)
+            root.desktopController.dragTo(end.x, end.y)
+            root.desktopController.endDrag()
+        }
+        onCanceled: root.desktopController.endDrag()
+        FrameAnimation {
+            running: grip.pressed && (grip.currentPosition.x !== grip.targetPosition.x || grip.currentPosition.y !== grip.targetPosition.y)
+            onTriggered: {
+                const target = grip.targetPosition
+                const current = grip.currentPosition
+                const blend = 1 - Math.exp(-frameTime / 0.024)
+                const dx = target.x - current.x
+                const dy = target.y - current.y
+                grip.currentPosition = Math.max(Math.abs(dx), Math.abs(dy)) < 0.5
+                    ? target : Qt.point(current.x + dx * blend, current.y + dy * blend)
+                root.desktopController.dragTo(Math.round(grip.currentPosition.x), Math.round(grip.currentPosition.y))
+            }
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: grip.pressed ? 50 : grip.containsMouse ? 42 : 32
+            height: 4
+            radius: 2
+            color: root.ink
+            opacity: grip.pressed ? 0.72 : grip.containsMouse ? 0.52 : hover.hovered ? 0.28 : 0
+            Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: 120 } }
         }
     }
     ResizeHandle {
