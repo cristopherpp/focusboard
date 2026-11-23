@@ -1,0 +1,2 @@
+37937a86f9040573b8e13e99b708bf025daffd5ab5b9f108c4de79f564aba77f  Focusboard-Setup-x64.exe
+87b23f3e6fd3a318d44d57e09bc56727cd933e343d27f28f16f1c2993c7cfaee  Focusboard-Portable-x64.zip
